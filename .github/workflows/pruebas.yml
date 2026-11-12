@@ -90,10 +90,17 @@ jobs:
           php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
           php public/admin/tool/phpunit/cli/util.php --buildcomponentconfigs
 
+      # Con cobertura, PHPUnit valida los atributos Covers*, y varias pruebas de
+      # Moodle apuntan a funciones que no existen. MDL-85136 convirtió anotaciones
+      # como "@covers ::metodo" en CoversFunction('metodo'). El CI de Moodle corre
+      # sin cobertura y nunca lo ve. Esos avisos de PHPUnit no fallan el job, pero
+      # quedan listados en el log. Los avisos y deprecaciones de PHP, y las
+      # pruebas que fallan, sí lo fallan.
       - name: Pruebas con cobertura
         run: |
           mkdir -p coverage reports
           vendor/bin/phpunit -c "${{ matrix.path }}" \
+            --do-not-fail-on-phpunit-warning \
             --coverage-clover "coverage/${{ matrix.component }}.xml" \
             --log-junit "reports/${{ matrix.component }}.xml"
 
