@@ -1,11 +1,17 @@
 # Entorno local del proyecto de pruebas: PHP 8.4 y PostgreSQL 17, los mismos
 # del pipeline. Los comandos se ejecutan desde esta carpeta (pruebas/docker):
 #
+#   docker compose watch web cron               # Moodle en http://localhost:8000
 #   docker compose run --rm moodle <comando>    # PHPUnit, instalación, siembra
-#   docker compose up -d web cron               # Moodle en http://localhost:8000
 #
 # Desde la raíz del repositorio, con -f, la construcción falla en Windows: buildx
 # pide un permiso de lectura sobre el Dockerfile.
+#
+# El código no se monta desde la carpeta de Windows: vive en el volumen codigo.
+# Montado desde Windows, cada acceso a un archivo cruza la carpeta compartida, y
+# Moodle hace miles por página: tardaba ~25 s por página, contra ~0,1 s desde el
+# volumen. El volumen se llena una vez con copiar-codigo.sh, y docker compose
+# watch le copia cada archivo que se guarda en el repositorio (ver web.develop).
 name: moodle-pruebas
 
 # Lo que comparten los tres servicios de Moodle: la imagen, el código y los datos.
@@ -16,11 +22,12 @@ x-moodle: &moodle
     db:
       condition: service_healthy
   volumes:
-    # El repositorio entero, para probar el código tal como está en disco.
-    - ../..:/var/www/moodle
-    # vendor/ en un volumen propio: Composer instala miles de archivos, y
-    # escribirlos a través de la carpeta compartida con Windows es muy lento.
+    - codigo:/var/www/moodle
+    # vendor/ en un volumen propio, que instala init.php de PHPUnit (Composer).
     - vendor:/var/www/moodle/vendor
+    # Los reportes (cobertura, JUnit) sí van a la carpeta de Windows, para
+    # abrirlos desde ahí. Son pocos archivos y solo de escritura.
+    - ../reportes:/var/www/moodle/pruebas/reportes
     - moodledata:/var/moodledata
   # Moodle se niega a arrancar si sus carpetas de datos no existen. La del sitio
   # queda abierta a todos porque la escriben la CLI (root) y Apache (www-data);
@@ -57,6 +64,39 @@ services:
     command: ['apache2-foreground']
     ports:
       - '8000:80'
+    # docker compose watch copia al volumen codigo cada archivo que cambia, y
+    # también borra los que se eliminan. Los tres servicios comparten el volumen,
+    # así que basta con vigilar desde este. Mientras watch no esté corriendo,
+    # Moodle no ve los cambios.
+    #
+    # Solo se vigila lo que el proyecto modifica: los componentes de las
+    # funcionalidades (con sus subplugins), pruebas/ y config.php. Vigilar el
+    # repositorio entero (~68 000 archivos) demoraba cada cambio entre 36 y 51 s.
+    # El resto de Moodle no cambia, porque el fork no se sincroniza con el
+    # original; si cambiara, se vuelve a correr copiar-codigo.sh.
+    develop:
+      watch:
+        - &sincronizar
+          action: sync
+          path: ../../public/enrol/self
+          target: /var/www/moodle/public/enrol/self
+          ignore: ['**/phpunit.xml', phpunit.xml]
+        - <<: *sincronizar
+          path: ../../public/mod/assign
+          target: /var/www/moodle/public/mod/assign
+        - <<: *sincronizar
+          path: ../../public/mod/quiz
+          target: /var/www/moodle/public/mod/quiz
+        - <<: *sincronizar
+          path: ../../public/mod/forum
+          target: /var/www/moodle/public/mod/forum
+        - action: sync
+          path: ../../pruebas
+          target: /var/www/moodle/pruebas
+          ignore: [reportes/, node_modules/]
+        - action: sync
+          path: ../../config.php
+          target: /var/www/moodle/config.php
 
   # Las tareas programadas y en segundo plano: notificaciones, calificaciones,
   # limpieza. Moodle avisa en la administración si el cron no corre.
@@ -66,5 +106,6 @@ services:
 
 volumes:
   db-data:
+  codigo:
   vendor:
   moodledata:
