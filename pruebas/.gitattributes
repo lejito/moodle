@@ -1,0 +1,4 @@
+# Los scripts de shell corren en Linux (contenedores y runners de CI). Con
+# core.autocrlf=true, lo habitual en Windows, git los dejaría con CRLF y bash
+# fallaría con "$'\r': command not found".
+*.sh text eol=lf
