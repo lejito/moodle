@@ -21,7 +21,9 @@
 # agrega la del subplugin; sus pruebas, idioma y db/ quedan fuera del análisis de
 # Sonar por sonar.exclusions y sonar.coverage.exclusions.
 #
-# pcov se enciende aquí porque la imagen de pruebas/docker lo trae apagado.
+# pcov se enciende aquí porque la imagen de pruebas/docker lo trae apagado, y mide
+# public/ de este repositorio: la imagen lo apunta a /var/www/moodle, y el clon de
+# Jenkins está en otra ruta. Sin eso, la cobertura sale vacía.
 #
 # Con cobertura, PHPUnit valida los atributos Covers*. Si una prueba declara un
 # objetivo que no existe, emite un aviso, descarta toda la cobertura de esa
@@ -46,7 +48,7 @@ for dir in "$@"; do
     extra+=(--coverage-filter "$PWD/$dir")
   fi
   echo "::group::$dir"
-  php -d pcov.enabled=1 vendor/bin/phpunit -c "$dir" "${extra[@]}" \
+  php -d pcov.enabled=1 -d pcov.directory="$PWD/public" vendor/bin/phpunit -c "$dir" "${extra[@]}" \
     --coverage-clover "coverage/$report.xml" \
     --log-junit "reports/$report.xml" || status=1
   echo "::endgroup::"
