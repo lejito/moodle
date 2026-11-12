@@ -952,37 +952,30 @@ class mod_forum_external extends external_api {
      * @throws moodle_exception If an option is not recognised.
      */
     protected static function validate_post_options(array $options, $discussionsubscribe, \context $context): array {
-        $validated = array(
+        // The type each option is cleaned to. Any other option name is rejected.
+        $types = [
+            'discussionsubscribe' => PARAM_BOOL,
+            'private' => PARAM_BOOL,
+            'inlineattachmentsid' => PARAM_INT,
+            'attachmentsid' => PARAM_INT,
+            'topreferredformat' => PARAM_BOOL,
+        ];
+        $validated = [
             'discussionsubscribe' => $discussionsubscribe,
-            'private'             => false,
+            'private' => false,
             'inlineattachmentsid' => 0,
             'attachmentsid' => null,
-            'topreferredformat'   => false
-        );
+            'topreferredformat' => false,
+        ];
         foreach ($options as $option) {
             $name = trim($option['name']);
-            switch ($name) {
-                case 'discussionsubscribe':
-                    $value = clean_param($option['value'], PARAM_BOOL);
-                    break;
-                case 'private':
-                    $value = clean_param($option['value'], PARAM_BOOL);
-                    break;
-                case 'inlineattachmentsid':
-                    $value = clean_param($option['value'], PARAM_INT);
-                    break;
-                case 'attachmentsid':
-                    $value = clean_param($option['value'], PARAM_INT);
-                    // Ensure that the user has permissions to create attachments.
-                    if (!has_capability('mod/forum:createattachment', $context)) {
-                        $value = 0;
-                    }
-                    break;
-                case 'topreferredformat':
-                    $value = clean_param($option['value'], PARAM_BOOL);
-                    break;
-                default:
-                    throw new moodle_exception('errorinvalidparam', 'webservice', '', $name);
+            if (!array_key_exists($name, $types)) {
+                throw new moodle_exception('errorinvalidparam', 'webservice', '', $name);
+            }
+            $value = clean_param($option['value'], $types[$name]);
+            // Ensure that the user has permissions to create attachments.
+            if ($name === 'attachmentsid' && !has_capability('mod/forum:createattachment', $context)) {
+                $value = 0;
             }
             $validated[$name] = $value;
         }
