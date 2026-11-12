@@ -21,42 +21,12 @@ permissions:
 
 jobs:
   phpunit:
-    name: 'Pruebas unitarias (${{ matrix.component }})'
+    # Un solo job: el sitio de pruebas se instala una vez y los componentes
+    # corren uno tras otro, un step por funcionalidad. Es más lento que una
+    # matriz en paralelo, pero instala Moodle una sola vez.
+    name: Pruebas unitarias
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      # Los componentes de las funcionalidades evaluadas. Esta lista y
-      # sonar.sources / sonar.exclusions de sonar-project.properties van juntas:
-      # si cambia una funcionalidad, cambian las dos.
-      #
-      # paths admite varias carpetas separadas por espacios. Cada una tiene su
-      # propio phpunit.xml, y se usa para agrupar en un job los subplugins
-      # pequeños que usan las funcionalidades.
-      matrix:
-        include:
-          - component: enrol_self # Automatriculación con clave
-            paths: public/enrol/self
-          - component: mod_assign # Entregar y calificar una tarea
-            paths: public/mod/assign
-          - component: assignsubmission # Entregar: texto en línea y archivo
-            paths: >-
-              public/mod/assign/submission/onlinetext
-              public/mod/assign/submission/file
-          - component: mod_quiz # Presentar un cuestionario
-            paths: public/mod/quiz
-          - component: quizaccess # Reglas de acceso al presentar un cuestionario
-            paths: >-
-              public/mod/quiz/accessrule/delaybetweenattempts
-              public/mod/quiz/accessrule/ipaddress
-              public/mod/quiz/accessrule/numattempts
-              public/mod/quiz/accessrule/offlineattempts
-              public/mod/quiz/accessrule/openclosedate
-              public/mod/quiz/accessrule/password
-              public/mod/quiz/accessrule/securewindow
-              public/mod/quiz/accessrule/timelimit
-          - component: mod_forum # Participar en un foro
-            paths: public/mod/forum
     services:
       postgres:
         image: postgres:17
@@ -98,6 +68,7 @@ jobs:
       # --buildcomponentconfigs genera un phpunit.xml por componente, cuya
       # cobertura incluye solo ese componente y no todo Moodle.
       - name: Preparar el sitio de pruebas
+        id: preparar
         run: |
           echo "pathtophp=$(which php)" >> "$GITHUB_ENV"
           cp .github/workflows/config-template.php config.php
@@ -106,39 +77,62 @@ jobs:
           php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
           php public/admin/tool/phpunit/cli/util.php --buildcomponentconfigs
 
-      # Con cobertura, PHPUnit valida los atributos Covers*. Si una prueba
-      # declara un objetivo inexistente, emite un aviso y descarta toda la
-      # cobertura de esa prueba. El aviso falla el job a propósito.
-      #
-      # Cada carpeta corre aunque falle una anterior, y el job falla al final si
-      # alguna falló. Los reportes se nombran <componente>-<carpeta>, porque el
-      # job de calidad los junta todos en una sola carpeta.
-      - name: Pruebas con cobertura
-        run: |
-          mkdir -p coverage reports
-          status=0
-          for dir in ${{ matrix.paths }}; do
-            name="${{ matrix.component }}-$(basename "$dir")"
-            echo "::group::$dir"
-            vendor/bin/phpunit -c "$dir" \
-              --coverage-clover "coverage/$name.xml" \
-              --log-junit "reports/$name.xml" || status=1
-            echo "::endgroup::"
-          done
-          exit $status
+      # Los componentes de las funcionalidades evaluadas, un step por cada una.
+      # Estos steps y sonar.sources / sonar.exclusions de
+      # sonar-project.properties van juntos: si cambia una funcionalidad,
+      # cambian los dos. Cada step corre aunque falle uno anterior, y el job
+      # falla si alguno falló. El detalle está en pruebas/ci/phpunit.sh.
+      - name: 'RF-MOOD-01 · enrol_self'
+        if: ${{ !cancelled() && steps.preparar.outcome == 'success' }}
+        run: bash pruebas/ci/phpunit.sh enrol_self public/enrol/self
+
+      - name: 'RF-MOOD-02 y 03 · mod_assign'
+        if: ${{ !cancelled() && steps.preparar.outcome == 'success' }}
+        run: bash pruebas/ci/phpunit.sh mod_assign public/mod/assign
+
+      - name: 'RF-MOOD-02 · assignsubmission (texto en línea y archivo)'
+        if: ${{ !cancelled() && steps.preparar.outcome == 'success' }}
+        run: >-
+          bash pruebas/ci/phpunit.sh assignsubmission
+          public/mod/assign/submission/onlinetext
+          public/mod/assign/submission/file
+
+      - name: 'RF-MOOD-04 · mod_quiz'
+        if: ${{ !cancelled() && steps.preparar.outcome == 'success' }}
+        run: bash pruebas/ci/phpunit.sh mod_quiz public/mod/quiz
+
+      # Todas las reglas de acceso salvo Safe Exam Browser (seb), que ninguna
+      # funcionalidad usa.
+      - name: 'RF-MOOD-04 · quizaccess (reglas de acceso)'
+        if: ${{ !cancelled() && steps.preparar.outcome == 'success' }}
+        run: >-
+          bash pruebas/ci/phpunit.sh quizaccess
+          public/mod/quiz/accessrule/delaybetweenattempts
+          public/mod/quiz/accessrule/ipaddress
+          public/mod/quiz/accessrule/numattempts
+          public/mod/quiz/accessrule/offlineattempts
+          public/mod/quiz/accessrule/openclosedate
+          public/mod/quiz/accessrule/password
+          public/mod/quiz/accessrule/securewindow
+          public/mod/quiz/accessrule/timelimit
+
+      - name: 'RF-MOOD-05 · mod_forum'
+        if: ${{ !cancelled() && steps.preparar.outcome == 'success' }}
+        run: bash pruebas/ci/phpunit.sh mod_forum public/mod/forum
 
       - name: Guardar la cobertura
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-${{ matrix.component }}
+          name: cobertura
           path: coverage/*.xml
           retention-days: 7
 
       - name: Guardar el reporte de resultados
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: junit-${{ matrix.component }}
+          name: resultados-junit
           path: reports/*.xml
           retention-days: 14
 
@@ -158,9 +152,8 @@ jobs:
       - name: Recuperar los reportes de cobertura
         uses: actions/download-artifact@v8
         with:
-          pattern: coverage-*
+          name: cobertura
           path: coverage
-          merge-multiple: true
 
       - name: Listar los reportes para Sonar
         id: coverage
