@@ -1,0 +1,19 @@
+# PHP 8.4 con lo que Moodle y sus pruebas necesitan, igual que el pipeline
+# (.github/workflows/pruebas.yml): las extensiones de composer.json, el
+# controlador pgsql y pcov para la cobertura.
+FROM php:8.4-cli-bookworm
+
+COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
+
+# git y unzip los usa Composer para instalar las dependencias. La localización
+# en_AU.UTF-8 la exigen algunas pruebas de Moodle; el pipeline la genera igual.
+RUN install-php-extensions gd intl zip pgsql pcov exif soap opcache \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends git unzip locales \
+  && sed -i 's/^# *\(en_AU.UTF-8\)/\1/' /etc/locale.gen \
+  && locale-gen \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY php.ini /usr/local/etc/php/conf.d/zz-moodle.ini
+
+WORKDIR /var/www/moodle

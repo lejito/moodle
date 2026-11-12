@@ -1,0 +1,44 @@
+# Entorno local del proyecto de pruebas: PHP 8.4 y PostgreSQL 17, los mismos
+# del pipeline. Los comandos se ejecutan desde esta carpeta (pruebas/docker):
+#
+#   docker compose run --rm moodle <comando>
+#
+# Desde la raíz del repositorio, con -f, la construcción falla en Windows: buildx
+# pide un permiso de lectura sobre el Dockerfile.
+name: moodle-pruebas
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: moodle
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: moodle
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U moodle']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  moodle:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # El repositorio entero, para probar el código tal como está en disco.
+      - ../..:/var/www/moodle
+      # vendor/ en un volumen propio: Composer instala miles de archivos, y
+      # escribirlos a través de la carpeta compartida con Windows es muy lento.
+      - vendor:/var/www/moodle/vendor
+      - moodledata:/var/moodledata
+    # Moodle se niega a arrancar si sus carpetas de datos no existen.
+    entrypoint: ['sh', '-c', 'mkdir -p /var/moodledata/data /var/moodledata/phpunit && exec "$$@"', '--']
+    command: ['php', '--version']
+
+volumes:
+  db-data:
+  vendor:
+  moodledata:

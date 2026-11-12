@@ -64,3 +64,8 @@ tsconfig.aliases.json
 
 # Ignore the types for AMD code.
 /.types
+
+# Proyecto de pruebas: documentos de trabajo y paquetes de traspaso, solo locales.
+/docs/
+/dist/
+/CLAUDE.md

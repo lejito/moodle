@@ -1,0 +1,152 @@
+name: Pruebas y calidad
+
+# Pipeline del proyecto de pruebas de software sobre este fork, 100 % en la nube:
+# GitHub Actions ejecuta las pruebas y SonarQube Cloud analiza y aplica el umbral
+# de calidad. Corre sobre main porque los workflows de Moodle (push.yml y
+# composed.yml) ignoran esa rama, así que los dos nunca se ejecutan a la vez.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Un push nuevo a la misma rama reemplaza la corrida de un pull request, pero nunca
+# una de main.
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  phpunit:
+    name: 'PHPUnit: ${{ matrix.component }}'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Los componentes de las funcionalidades evaluadas. Esta lista y
+      # sonar.sources / sonar.tests de sonar-project.properties van juntas: si
+      # cambia una funcionalidad, cambian las dos.
+      matrix:
+        include:
+          - component: enrol_self # Automatriculación con clave
+            path: public/enrol/self
+          - component: mod_assign # Entregar y calificar una tarea
+            path: public/mod/assign
+          - component: mod_quiz # Presentar un cuestionario
+            path: public/mod/quiz
+          - component: core_ai # Límite de solicitudes del proveedor de IA
+            path: public/ai
+          - component: aiplacement_courseassist # Resumir contenido con IA
+            path: public/ai/placement/courseassist
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # La plantilla de configuración de Moodle apunta a estos dos servicios; se
+      # levantan igual que en push.yml para que ninguna prueba dependa de que falten.
+      exttests:
+        image: moodlehq/moodle-exttests
+        ports: ['8080:80']
+      redis:
+        image: redis
+        ports: ['6379:6379']
+    # .github/workflows/config-template.php lee el motor de base de datos de aquí
+    # en cada carga, no solo al instalar.
+    env:
+      dbtype: pgsql
+    steps:
+      - uses: actions/checkout@v6
+
+      # pcov detecta su directorio solo y, al existir lib/ en la raíz, tomaría ese
+      # shim en lugar del código: sin pcov.directory la cobertura sale vacía.
+      - name: PHP 8.4 con pcov
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: pcov
+          ini-values: max_input_vars=5000, pcov.directory=${{ github.workspace }}/public
+
+      # init.php instala las dependencias de Composer y el sitio de pruebas.
+      # --buildcomponentconfigs genera un phpunit.xml por componente, cuya
+      # cobertura incluye solo ese componente y no todo Moodle.
+      - name: Preparar el sitio de pruebas
+        run: |
+          echo "pathtophp=$(which php)" >> "$GITHUB_ENV"
+          cp .github/workflows/config-template.php config.php
+          mkdir ../moodledata
+          sudo locale-gen en_AU.UTF-8
+          php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
+          php public/admin/tool/phpunit/cli/util.php --buildcomponentconfigs
+
+      - name: Pruebas con cobertura
+        run: |
+          mkdir -p coverage reports
+          vendor/bin/phpunit -c "${{ matrix.path }}" \
+            --coverage-clover "coverage/${{ matrix.component }}.xml" \
+            --log-junit "reports/${{ matrix.component }}.xml"
+
+      - name: Guardar la cobertura
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.component }}
+          path: coverage/${{ matrix.component }}.xml
+          retention-days: 7
+
+      - name: Guardar el reporte de resultados
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-${{ matrix.component }}
+          path: reports/${{ matrix.component }}.xml
+          retention-days: 14
+
+  quality:
+    name: Calidad (SonarQube Cloud)
+    needs: phpunit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Sonar necesita el historial para atribuir el código y calcular el
+          # código nuevo, sobre el que se evalúa el umbral de calidad.
+          fetch-depth: 0
+
+      # Los reportes traen rutas absolutas del runner; esta ejecución usa la misma
+      # ruta de trabajo, así que Sonar las resuelve sin reescribirlas.
+      - name: Recuperar los reportes de cobertura
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage
+          merge-multiple: true
+
+      - name: Listar los reportes para Sonar
+        id: coverage
+        run: echo "paths=$(ls coverage/*.xml | paste -sd, -)" >> "$GITHUB_OUTPUT"
+
+      # sonar-project.properties tiene el alcance del análisis. La organización y la
+      # clave del proyecto vienen de las variables del repositorio, como en
+      # beverage-ledger. qualitygate.wait hace fallar este job si no se cumple el
+      # umbral de calidad.
+      - name: Análisis y umbral de calidad
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.php.coverage.reportPaths=${{ steps.coverage.outputs.paths }}
+            -Dsonar.qualitygate.wait=true
