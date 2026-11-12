@@ -1,0 +1,66 @@
+# Moodle desplegado por el pipeline de Jenkins (pruebas/jenkins/Jenkinsfile), en http://localhost:8000.
+# Es un proyecto aparte del entorno de desarrollo (compose.yml): usa la imagen moodle-pruebas/app, que ya
+# trae el código, en lugar del volumen codigo. Los comandos se ejecutan desde esta carpeta:
+#
+#   docker compose -f compose.despliegue.yml ps
+#   docker compose -f compose.despliegue.yml logs web
+#
+# El puerto sale de la variable PUERTO (8000 si no está). Este proyecto y el de desarrollo usan el mismo
+# puerto por defecto, así que no corren a la vez salvo que uno cambie de puerto.
+name: moodle-despliegue
+
+x-moodle: &moodle
+  image: moodle-pruebas/app:latest
+  depends_on:
+    db:
+      condition: service_healthy
+  environment:
+    # config.php toma de aquí su wwwroot.
+    MOODLE_URL: http://localhost:${PUERTO:-8000}
+  volumes:
+    - moodledata:/var/moodledata
+    # servicios_web.php deja aquí los tokens de la API; el Jenkinsfile los lee para la prueba de humo.
+    - reportes:/var/www/moodle/pruebas/reportes
+  entrypoint:
+    - sh
+    - -c
+    - mkdir -p /var/moodledata/data && chmod 0777 /var/moodledata/data && exec "$$@"
+    - --
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: moodle
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: moodle
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U moodle']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Instalación, siembra y tokens de la API: comandos de un solo uso.
+  moodle:
+    <<: *moodle
+    command: ['php', '--version']
+
+  web:
+    <<: *moodle
+    command: ['apache2-foreground']
+    ports:
+      - '${PUERTO:-8000}:80'
+    restart: unless-stopped
+
+  cron:
+    <<: *moodle
+    command: ['sh', '-c', 'while true; do php admin/cli/cron.php; sleep 60; done']
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  moodledata:
+  reportes:

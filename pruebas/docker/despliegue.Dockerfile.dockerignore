@@ -1,0 +1,9 @@
+.git
+**/node_modules
+coverage
+reports
+.scannerwork
+pruebas/reportes
+config.php
+**/phpunit.xml
+composer.phar

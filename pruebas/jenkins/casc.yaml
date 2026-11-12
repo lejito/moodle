@@ -1,0 +1,77 @@
+# Configuración completa de Jenkins, que se aplica en cada arranque: el usuario administrador, el servidor
+# de SonarQube con su token y el job del pipeline. Los valores ${...} vienen del archivo .env.
+jenkins:
+  systemMessage: Pipeline del proyecto de pruebas de software sobre Moodle.
+  # Un build a la vez: con 8 GB de RAM no caben dos.
+  numExecutors: 1
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: ${JENKINS_ADMIN_PASSWORD}
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: sonarqube-token
+              description: Token de análisis de SonarQube
+              secret: ${SONAR_TOKEN}
+
+unclassified:
+  location:
+    url: http://localhost:8080/
+  # SonarQube corre en Windows, fuera de Docker. Desde los contenedores, el equipo es host.docker.internal.
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: SonarQube
+        serverUrl: ${SONAR_HOST_URL:-http://host.docker.internal:9000}
+        credentialsId: sonarqube-token
+
+# El job lee pruebas/jenkins/Jenkinsfile de la rama main. GitHub no puede avisarle a un Jenkins que corre
+# en un equipo personal, así que Jenkins revisa el repositorio cada dos minutos y corre si hay commits
+# nuevos. El clon es superficial: el historial completo de Moodle pesa varios GB.
+jobs:
+  - script: |
+      pipelineJob('moodle') {
+        displayName('Moodle: pruebas, calidad y despliegue')
+        properties {
+          disableConcurrentBuilds()
+          pipelineTriggers {
+            triggers {
+              pollSCM {
+                scmpoll_spec('H/2 * * * *')
+              }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            lightweight(true)
+            scriptPath('pruebas/jenkins/Jenkinsfile')
+            scm {
+              git {
+                remote {
+                  url('${REPOSITORIO}')
+                }
+                branch('*/main')
+                extensions {
+                  cloneOptions {
+                    shallow(true)
+                    depth(1)
+                    noTags(true)
+                    timeout(60)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }

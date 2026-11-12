@@ -1,0 +1,156 @@
+// Pipeline del proyecto de pruebas de software sobre Moodle, en el Jenkins local (pruebas/jenkins).
+//
+//   1. Pruebas unitarias: PHPUnit con cobertura, una etapa por funcionalidad.
+//   2. Análisis de calidad: SonarQube con la cobertura, y el build falla si no se cumple el umbral.
+//   3. Despliegue: una imagen de Moodle con este código, instalada y sembrada desde cero, en
+//      http://localhost:8000 (o el puerto de PUERTO en .env).
+//   4. Prueba de humo: la interfaz y la API REST del Moodle desplegado responden.
+//
+// Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
+// juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
+// anterior; el análisis y el despliegue solo corren si todas pasaron.
+
+def pruebas(String nombre, String carpetas) {
+  catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+    sh "bash pruebas/jenkins/php.sh ejecutar bash pruebas/ci/phpunit.sh ${nombre} ${carpetas}"
+  }
+}
+
+def todoBien() {
+  return currentBuild.currentResult == 'SUCCESS'
+}
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    timeout(time: 3, unit: 'HOURS')
+  }
+
+  environment {
+    PUERTO = "${env.PUERTO ?: '8000'}"
+  }
+
+  stages {
+    stage('Preparar el sitio de pruebas') {
+      steps {
+        sh 'docker build -t moodle-pruebas/php:8.4 pruebas/docker'
+        sh 'rm -rf coverage reports && cp pruebas/docker/config.php config.php'
+        sh 'bash pruebas/jenkins/php.sh iniciar'
+        // init.php instala las dependencias de Composer y el sitio de pruebas; --buildcomponentconfigs
+        // genera un phpunit.xml por componente, cuya cobertura mide solo ese componente.
+        sh 'bash pruebas/jenkins/php.sh ejecutar php public/admin/tool/phpunit/cli/init.php --no-composer-self-update'
+        sh 'bash pruebas/jenkins/php.sh ejecutar php public/admin/tool/phpunit/cli/util.php --buildcomponentconfigs'
+      }
+    }
+
+    stage('Pruebas unitarias') {
+      stages {
+        stage('RF-MOOD-01 · enrol_self') {
+          steps { script { pruebas('enrol_self', 'public/enrol/self') } }
+        }
+        stage('RF-MOOD-02 y 03 · mod_assign') {
+          steps { script { pruebas('mod_assign', 'public/mod/assign') } }
+        }
+        stage('RF-MOOD-02 · assignsubmission') {
+          steps {
+            script {
+              pruebas('assignsubmission',
+                'public/mod/assign/submission/onlinetext public/mod/assign/submission/file')
+            }
+          }
+        }
+        stage('RF-MOOD-04 · mod_quiz') {
+          steps { script { pruebas('mod_quiz', 'public/mod/quiz') } }
+        }
+        // Todas las reglas de acceso salvo Safe Exam Browser (seb), que ninguna funcionalidad usa.
+        stage('RF-MOOD-04 · quizaccess') {
+          steps {
+            script {
+              pruebas('quizaccess', [
+                'delaybetweenattempts', 'ipaddress', 'numattempts', 'offlineattempts',
+                'openclosedate', 'password', 'securewindow', 'timelimit',
+              ].collect { "public/mod/quiz/accessrule/${it}" }.join(' '))
+            }
+          }
+        }
+        stage('RF-MOOD-05 · mod_forum') {
+          steps { script { pruebas('mod_forum', 'public/mod/forum') } }
+        }
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'reports/*.xml'
+          archiveArtifacts allowEmptyArchive: true, artifacts: 'coverage/*.xml'
+          // Los contenedores de las pruebas se van antes del análisis, para liberar memoria.
+          sh 'bash pruebas/jenkins/php.sh terminar'
+        }
+      }
+    }
+
+    stage('Análisis de calidad') {
+      when { expression { todoBien() } }
+      steps {
+        // El escáner corre en su propio contenedor, sobre el mismo clon. qualitygate.wait espera el
+        // resultado del umbral y hace fallar el build si no se cumple.
+        withSonarQubeEnv('SonarQube') {
+          sh '''
+            docker run --rm --volumes-from "$(hostname)" -w "$WORKSPACE" \
+              -e SONAR_HOST_URL -e SONAR_TOKEN="$SONAR_AUTH_TOKEN" -e SONAR_SCANNER_OPTS=-Xmx512m \
+              sonarsource/sonar-scanner-cli:12.4.0.4321_8.4.0 \
+              -Dsonar.projectKey=moodle-pruebas \
+              -Dsonar.projectName="Moodle - pruebas de software" \
+              -Dsonar.php.coverage.reportPaths="$(ls coverage/*.xml | paste -sd, -)" \
+              -Dsonar.scanner.skipJreProvisioning=true \
+              -Dsonar.qualitygate.wait=true
+          '''
+        }
+      }
+    }
+
+    stage('Despliegue') {
+      when { expression { todoBien() } }
+      steps {
+        // La imagen lleva el código y vendor/ adentro. Cada despliegue parte de cero: base de datos y
+        // datos nuevos, para que las pruebas E2E y de API encuentren siempre lo mismo.
+        sh 'docker build -f pruebas/docker/despliegue.Dockerfile -t moodle-pruebas/app:latest .'
+        dir('pruebas/docker') {
+          sh '''
+            export COMPOSE_FILE=compose.despliegue.yml
+            docker compose down -v
+            docker compose run --rm -T moodle php admin/cli/install_database.php --agree-license --lang=en \
+              --fullname="Moodle de pruebas" --shortname="Pruebas" \
+              --adminuser=admin --adminpass='Pruebas-2026' --adminemail=admin@example.com
+            docker compose run --rm -T moodle php pruebas/seed/sembrar.php
+            docker compose run --rm -T moodle php pruebas/seed/servicios_web.php
+            docker compose up -d web cron
+            mkdir -p ../reportes
+            docker compose run --rm -T --no-deps moodle cat pruebas/reportes/servicios-web.json > ../reportes/servicios-web.json
+          '''
+        }
+      }
+    }
+
+    // Moodle exige que la dirección coincida con su wwwroot (localhost:PUERTO). Desde el contenedor de
+    // Jenkins, ese puerto está en host.docker.internal; curl se conecta ahí sin cambiar la dirección.
+    stage('Prueba de humo') {
+      when { expression { todoBien() } }
+      steps {
+        sh '''
+          HUMO_CONECTAR="localhost:$PUERTO:host.docker.internal:$PUERTO" \
+            bash pruebas/ci/humo.sh "http://localhost:$PUERTO" pruebas/reportes/servicios-web.json
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      // Por si el build se canceló a mitad de las pruebas unitarias.
+      sh 'bash pruebas/jenkins/php.sh terminar'
+    }
+  }
+}

@@ -1,0 +1,34 @@
+# Jenkins del proyecto, en http://localhost:8080. Los comandos se ejecutan desde esta carpeta:
+#
+#   cp .env.ejemplo .env      # una vez, y completar el token de SonarQube y la contraseña
+#   docker compose up -d --build
+#
+# Jenkins usa el Docker del equipo (el socket) para correr cada etapa en contenedores hermanos: PHPUnit
+# con PostgreSQL, el escáner de SonarQube y el Moodle desplegado (pruebas/docker/compose.despliegue.yml).
+# Su clon del repositorio vive en el volumen jenkins-home, dentro de Docker, así que esos contenedores lo
+# leen rápido, sin cruzar la carpeta compartida de Windows.
+name: jenkins-pruebas
+
+services:
+  jenkins:
+    build: .
+    image: moodle-pruebas/jenkins:2.580.2
+    env_file: .env
+    environment:
+      # Sin el asistente de instalación: todo lo configura casc.yaml. La memoria de Java queda acotada
+      # para que Jenkins, SonarQube y Moodle quepan juntos en un equipo de 8 GB.
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false -Xms256m -Xmx512m
+    ports:
+      - '8080:8080'
+    volumes:
+      - jenkins-home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    # En Docker Desktop el socket es de root; el usuario jenkins lo usa a través del grupo root.
+    group_add: ['0']
+    # host.docker.internal ya existe en Docker Desktop; esto lo agrega también en Linux.
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+
+volumes:
+  jenkins-home:

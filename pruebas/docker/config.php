@@ -39,7 +39,8 @@ $CFG->dbpass    = 'moodle';
 $CFG->prefix    = 'mdl_';
 $CFG->dboptions = ['dbport' => 5432];
 
-$CFG->wwwroot   = 'http://localhost:8000';
+// El Moodle desplegado por Jenkins (compose.despliegue.yml) puede usar otro puerto.
+$CFG->wwwroot   = getenv('MOODLE_URL') ?: 'http://localhost:8000';
 $CFG->dataroot  = '/var/moodledata/data';
 $CFG->admin     = 'admin';
 $CFG->directorypermissions = 02777;

@@ -1,13 +1,14 @@
 name: Pruebas y calidad
 
-# Pipeline del proyecto de pruebas de software sobre este fork, 100 % en la nube:
-# GitHub Actions ejecuta las pruebas y SonarQube Cloud analiza y aplica el umbral
-# de calidad. Corre sobre main porque los workflows de Moodle (push.yml y
-# composed.yml) ignoran esa rama, así que los dos nunca se ejecutan a la vez.
+# Pipeline anterior del proyecto de pruebas de software, 100 % en la nube: GitHub
+# Actions ejecuta las pruebas y SonarQube Cloud analiza y aplica el umbral de
+# calidad.
+#
+# APAGADO: el pipeline del proyecto es ahora Jenkins con SonarQube local
+# (pruebas/jenkins/Jenkinsfile). Este workflow se conserva y solo corre si se lanza
+# a mano desde la pestaña Actions; para volver a encenderlo, se restauran los
+# disparadores push (rama main) y pull_request.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 # Un push nuevo a la misma rama reemplaza la corrida de un pull request, pero nunca

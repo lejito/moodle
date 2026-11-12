@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Corre con cobertura las pruebas PHPUnit de un componente, o de varios
-# subplugins agrupados bajo un nombre. Lo usa el job "Pruebas unitarias" de
-# .github/workflows/pruebas.yml, un step por funcionalidad.
+# subplugins agrupados bajo un nombre. Lo usan las etapas de pruebas unitarias de
+# pruebas/jenkins/Jenkinsfile, una por funcionalidad (y el workflow apagado de
+# GitHub Actions).
 #
 #   bash pruebas/ci/phpunit.sh <nombre> <carpeta> [<carpeta>...]
 #
@@ -19,6 +20,8 @@
 # cuestionario (quizaccess_*). --coverage-filter solo acepta carpetas, así que se
 # agrega la del subplugin; sus pruebas, idioma y db/ quedan fuera del análisis de
 # Sonar por sonar.exclusions y sonar.coverage.exclusions.
+#
+# pcov se enciende aquí porque la imagen de pruebas/docker lo trae apagado.
 #
 # Con cobertura, PHPUnit valida los atributos Covers*. Si una prueba declara un
 # objetivo que no existe, emite un aviso, descarta toda la cobertura de esa
@@ -43,7 +46,7 @@ for dir in "$@"; do
     extra+=(--coverage-filter "$PWD/$dir")
   fi
   echo "::group::$dir"
-  vendor/bin/phpunit -c "$dir" "${extra[@]}" \
+  php -d pcov.enabled=1 vendor/bin/phpunit -c "$dir" "${extra[@]}" \
     --coverage-clover "coverage/$report.xml" \
     --log-junit "reports/$report.xml" || status=1
   echo "::endgroup::"
