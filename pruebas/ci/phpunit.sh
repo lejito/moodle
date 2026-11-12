@@ -11,6 +11,10 @@
 # hay varias carpetas, se agrega el nombre de cada una. Todas las carpetas
 # corren aunque falle una, y el script falla al final si alguna falló.
 #
+# El phpunit.xml de cada componente no mide backup/, aunque sus pruebas de
+# backup y restauración lo ejecutan. Si la carpeta existe, se suma a la
+# cobertura con --coverage-filter, que agrega directorios a los del XML.
+#
 # Con cobertura, PHPUnit valida los atributos Covers*. Si una prueba declara un
 # objetivo que no existe, emite un aviso, descarta toda la cobertura de esa
 # prueba y el script falla a propósito: hay que corregir el atributo.
@@ -26,8 +30,12 @@ for dir in "$@"; do
   if [ $# -gt 1 ]; then
     report="$name-$(basename "$dir")"
   fi
+  extra=()
+  if [ -d "$dir/backup" ]; then
+    extra=(--coverage-filter "$PWD/$dir/backup")
+  fi
   echo "::group::$dir"
-  vendor/bin/phpunit -c "$dir" \
+  vendor/bin/phpunit -c "$dir" "${extra[@]}" \
     --coverage-clover "coverage/$report.xml" \
     --log-junit "reports/$report.xml" || status=1
   echo "::endgroup::"
