@@ -149,14 +149,15 @@ jobs:
       - uses: actions/checkout@v6
 
       # vendor/ se instala en el runner y se monta en los contenedores (compose.ci.yml). Las extensiones
-      # las trae la imagen, no el PHP del runner.
+      # las trae la imagen, no el PHP del runner. Va con las dependencias de desarrollo porque la siembra
+      # usa el generador de preguntas, que carga PHPUnit.
       - name: Dependencias de Composer
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           tools: composer
           coverage: none
-      - run: composer install --no-dev --no-interaction --no-progress --prefer-dist --ignore-platform-req='ext-*'
+      - run: composer install --no-interaction --no-progress --prefer-dist --ignore-platform-req='ext-*'
 
       - name: Imagen de PHP 8.4 con Apache
         working-directory: pruebas/docker
