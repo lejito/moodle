@@ -1,7 +1,11 @@
 # PHP 8.4 con lo que Moodle y sus pruebas necesitan, igual que el pipeline
 # (.github/workflows/pruebas.yml): las extensiones de composer.json, el
 # controlador pgsql y pcov para la cobertura.
-FROM php:8.4-cli-bookworm
+#
+# La variante con Apache trae también la CLI de PHP, así que la misma imagen
+# sirve para PHPUnit y los scripts (servicio moodle), para la web (web) y para
+# el cron (cron).
+FROM php:8.4-apache-bookworm
 
 COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
 
@@ -15,5 +19,6 @@ RUN install-php-extensions gd intl zip pgsql pcov exif soap opcache \
   && rm -rf /var/lib/apt/lists/*
 
 COPY php.ini /usr/local/etc/php/conf.d/zz-moodle.ini
+COPY apache.conf /etc/apache2/sites-available/000-default.conf
 
 WORKDIR /var/www/moodle

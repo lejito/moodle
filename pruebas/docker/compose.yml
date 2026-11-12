@@ -1,11 +1,35 @@
 # Entorno local del proyecto de pruebas: PHP 8.4 y PostgreSQL 17, los mismos
 # del pipeline. Los comandos se ejecutan desde esta carpeta (pruebas/docker):
 #
-#   docker compose run --rm moodle <comando>
+#   docker compose run --rm moodle <comando>    # PHPUnit, instalación, siembra
+#   docker compose up -d web cron               # Moodle en http://localhost:8000
 #
 # Desde la raíz del repositorio, con -f, la construcción falla en Windows: buildx
 # pide un permiso de lectura sobre el Dockerfile.
 name: moodle-pruebas
+
+# Lo que comparten los tres servicios de Moodle: la imagen, el código y los datos.
+x-moodle: &moodle
+  build: .
+  image: moodle-pruebas/php:8.4
+  depends_on:
+    db:
+      condition: service_healthy
+  volumes:
+    # El repositorio entero, para probar el código tal como está en disco.
+    - ../..:/var/www/moodle
+    # vendor/ en un volumen propio: Composer instala miles de archivos, y
+    # escribirlos a través de la carpeta compartida con Windows es muy lento.
+    - vendor:/var/www/moodle/vendor
+    - moodledata:/var/moodledata
+  # Moodle se niega a arrancar si sus carpetas de datos no existen. La del sitio
+  # queda abierta a todos porque la escriben la CLI (root) y Apache (www-data);
+  # Moodle crea lo de adentro con $CFG->directorypermissions = 02777.
+  entrypoint:
+    - sh
+    - -c
+    - mkdir -p /var/moodledata/data /var/moodledata/phpunit && chmod 0777 /var/moodledata/data && exec "$$@"
+    - --
 
 services:
   db:
@@ -22,21 +46,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Comandos de un solo uso: PHPUnit, la instalación del sitio y la siembra.
   moodle:
-    build: .
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      # El repositorio entero, para probar el código tal como está en disco.
-      - ../..:/var/www/moodle
-      # vendor/ en un volumen propio: Composer instala miles de archivos, y
-      # escribirlos a través de la carpeta compartida con Windows es muy lento.
-      - vendor:/var/www/moodle/vendor
-      - moodledata:/var/moodledata
-    # Moodle se niega a arrancar si sus carpetas de datos no existen.
-    entrypoint: ['sh', '-c', 'mkdir -p /var/moodledata/data /var/moodledata/phpunit && exec "$$@"', '--']
+    <<: *moodle
     command: ['php', '--version']
+
+  # Moodle en el navegador, en la URL de $CFG->wwwroot (config.php).
+  web:
+    <<: *moodle
+    command: ['apache2-foreground']
+    ports:
+      - '8000:80'
+
+  # Las tareas programadas y en segundo plano: notificaciones, calificaciones,
+  # limpieza. Moodle avisa en la administración si el cron no corre.
+  cron:
+    <<: *moodle
+    command: ['sh', '-c', 'while true; do php admin/cli/cron.php; sleep 60; done']
 
 volumes:
   db-data:
