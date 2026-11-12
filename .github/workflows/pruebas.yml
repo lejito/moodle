@@ -55,10 +55,8 @@ jobs:
               public/mod/quiz/accessrule/password
               public/mod/quiz/accessrule/securewindow
               public/mod/quiz/accessrule/timelimit
-          - component: core_ai # Límite de solicitudes del proveedor de IA
-            paths: public/ai
-          - component: aiplacement_courseassist # Resumir contenido con IA
-            paths: public/ai/placement/courseassist
+          - component: mod_forum # Participar en un foro
+            paths: public/mod/forum
     services:
       postgres:
         image: postgres:17
