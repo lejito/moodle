@@ -21,26 +21,44 @@ permissions:
 
 jobs:
   phpunit:
-    name: 'PHPUnit: ${{ matrix.component }}'
+    name: 'Pruebas unitarias (${{ matrix.component }})'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       # Los componentes de las funcionalidades evaluadas. Esta lista y
-      # sonar.sources / sonar.tests de sonar-project.properties van juntas: si
-      # cambia una funcionalidad, cambian las dos.
+      # sonar.sources / sonar.exclusions de sonar-project.properties van juntas:
+      # si cambia una funcionalidad, cambian las dos.
+      #
+      # paths admite varias carpetas separadas por espacios. Cada una tiene su
+      # propio phpunit.xml, y se usa para agrupar en un job los subplugins
+      # pequeños que usan las funcionalidades.
       matrix:
         include:
           - component: enrol_self # Automatriculación con clave
-            path: public/enrol/self
+            paths: public/enrol/self
           - component: mod_assign # Entregar y calificar una tarea
-            path: public/mod/assign
+            paths: public/mod/assign
+          - component: assignsubmission # Entregar: texto en línea y archivo
+            paths: >-
+              public/mod/assign/submission/onlinetext
+              public/mod/assign/submission/file
           - component: mod_quiz # Presentar un cuestionario
-            path: public/mod/quiz
+            paths: public/mod/quiz
+          - component: quizaccess # Reglas de acceso al presentar un cuestionario
+            paths: >-
+              public/mod/quiz/accessrule/delaybetweenattempts
+              public/mod/quiz/accessrule/ipaddress
+              public/mod/quiz/accessrule/numattempts
+              public/mod/quiz/accessrule/offlineattempts
+              public/mod/quiz/accessrule/openclosedate
+              public/mod/quiz/accessrule/password
+              public/mod/quiz/accessrule/securewindow
+              public/mod/quiz/accessrule/timelimit
           - component: core_ai # Límite de solicitudes del proveedor de IA
-            path: public/ai
+            paths: public/ai
           - component: aiplacement_courseassist # Resumir contenido con IA
-            path: public/ai/placement/courseassist
+            paths: public/ai/placement/courseassist
     services:
       postgres:
         image: postgres:17
@@ -90,25 +108,32 @@ jobs:
           php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
           php public/admin/tool/phpunit/cli/util.php --buildcomponentconfigs
 
-      # Con cobertura, PHPUnit valida los atributos Covers*, y varias pruebas de
-      # Moodle apuntan a funciones que no existen. MDL-85136 convirtió anotaciones
-      # como "@covers ::metodo" en CoversFunction('metodo'). El CI de Moodle corre
-      # sin cobertura y nunca lo ve. Esos avisos de PHPUnit no fallan el job, pero
-      # quedan listados en el log. Los avisos y deprecaciones de PHP, y las
-      # pruebas que fallan, sí lo fallan.
+      # Con cobertura, PHPUnit valida los atributos Covers*. Si una prueba
+      # declara un objetivo inexistente, emite un aviso y descarta toda la
+      # cobertura de esa prueba. El aviso falla el job a propósito.
+      #
+      # Cada carpeta corre aunque falle una anterior, y el job falla al final si
+      # alguna falló. Los reportes se nombran <componente>-<carpeta>, porque el
+      # job de calidad los junta todos en una sola carpeta.
       - name: Pruebas con cobertura
         run: |
           mkdir -p coverage reports
-          vendor/bin/phpunit -c "${{ matrix.path }}" \
-            --do-not-fail-on-phpunit-warning \
-            --coverage-clover "coverage/${{ matrix.component }}.xml" \
-            --log-junit "reports/${{ matrix.component }}.xml"
+          status=0
+          for dir in ${{ matrix.paths }}; do
+            name="${{ matrix.component }}-$(basename "$dir")"
+            echo "::group::$dir"
+            vendor/bin/phpunit -c "$dir" \
+              --coverage-clover "coverage/$name.xml" \
+              --log-junit "reports/$name.xml" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
       - name: Guardar la cobertura
         uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.component }}
-          path: coverage/${{ matrix.component }}.xml
+          path: coverage/*.xml
           retention-days: 7
 
       - name: Guardar el reporte de resultados
@@ -116,11 +141,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: junit-${{ matrix.component }}
-          path: reports/${{ matrix.component }}.xml
+          path: reports/*.xml
           retention-days: 14
 
   quality:
-    name: Calidad (SonarQube Cloud)
+    name: Análisis de calidad
     needs: phpunit
     runs-on: ubuntu-24.04
     steps:
