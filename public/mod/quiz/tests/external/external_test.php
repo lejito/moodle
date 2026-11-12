@@ -87,9 +87,6 @@ class testable_mod_quiz_external extends mod_quiz_external {
 #[\PHPUnit\Framework\Attributes\CoversMethod(\mod_quiz_external::class, 'get_user_attempts')]
 #[\PHPUnit\Framework\Attributes\CoversMethod(\mod_quiz_external::class, 'get_user_quiz_attempts')]
 #[\PHPUnit\Framework\Attributes\CoversMethod(\mod_quiz_external::class, 'get_user_best_grade')]
-#[\PHPUnit\Framework\Attributes\CoversFunction('get_combined_review_options')]
-#[\PHPUnit\Framework\Attributes\CoversFunction('get_combined_review_options_parameters')]
-#[\PHPUnit\Framework\Attributes\CoversFunction('get_combined_review_options_returns')]
 final class external_test extends \core_external\tests\externallib_testcase {
     use \quiz_question_helper_test_trait;
 

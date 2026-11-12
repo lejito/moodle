@@ -37,7 +37,6 @@ require_once("$CFG->dirroot/mod/assign/tests/externallib_advanced_testcase.php")
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[\PHPUnit\Framework\Attributes\CoversClass(\mod_assign\external\remove_submission::class)]
-#[\PHPUnit\Framework\Attributes\CoversFunction('execute')]
 final class remove_submission_test extends \mod_assign\externallib_advanced_testcase {
     // Use the generator helper.
     use mod_assign_test_generator;

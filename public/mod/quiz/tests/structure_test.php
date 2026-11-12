@@ -33,8 +33,6 @@ require_once($CFG->dirroot . '/mod/quiz/tests/quiz_question_helper_test_trait.ph
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[\PHPUnit\Framework\Attributes\CoversClass(\mod_quiz\structure::class)]
-#[\PHPUnit\Framework\Attributes\CoversFunction('get_question_version_info')]
-#[\PHPUnit\Framework\Attributes\CoversFunction('has_use_capability')]
 final class structure_test extends \advanced_testcase {
 
     use \quiz_question_helper_test_trait;

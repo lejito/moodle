@@ -41,8 +41,8 @@ require_once(__DIR__ . '/fixtures/testable_assign.php');
  */
 #[\PHPUnit\Framework\Attributes\CoversMethod(\mod_assign_external::class, 'get_assignments')]
 #[\PHPUnit\Framework\Attributes\CoversMethod(\mod_assign_external::class, 'get_submission_status')]
-#[\PHPUnit\Framework\Attributes\CoversFunction('get_participant')]
-#[\PHPUnit\Framework\Attributes\CoversFunction('list_participants')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\mod_assign_external::class, 'get_participant')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\mod_assign_external::class, 'list_participants')]
 final class externallib_test extends \mod_assign\externallib_advanced_testcase {
 
     /**

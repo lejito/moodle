@@ -36,7 +36,6 @@ require_once($CFG->dirroot . '/mod/quiz/locallib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[\PHPUnit\Framework\Attributes\CoversClass(\mod_quiz\quiz_attempt::class)]
-#[\PHPUnit\Framework\Attributes\CoversMethod(\quiz_attempt::class, 'check_page_access')]
 #[\PHPUnit\Framework\Attributes\CoversFunction('quiz_start_new_attempt')]
 #[\PHPUnit\Framework\Attributes\CoversFunction('quiz_start_attempt_built_on_last')]
 #[\PHPUnit\Framework\Attributes\CoversFunction('quiz_start_new_attempt')]

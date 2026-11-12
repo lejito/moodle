@@ -40,7 +40,6 @@ require_once($CFG->libdir . '/completionlib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[\PHPUnit\Framework\Attributes\CoversClass(\mod_quiz\completion\custom_completion::class)]
-#[\PHPUnit\Framework\Attributes\CoversClass(\update_moduleinfo::class)]
 final class custom_completion_test extends advanced_testcase {
 
     /**

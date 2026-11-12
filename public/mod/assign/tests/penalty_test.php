@@ -37,7 +37,6 @@ require_once($CFG->dirroot . '/mod/assign/tests/generator.php');
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[\PHPUnit\Framework\Attributes\CoversFunction('assign_supports')]
-#[\PHPUnit\Framework\Attributes\CoversMethod(\mod_assign\penalty\helper::class, 'apply_penalty_to_submission')]
 #[\PHPUnit\Framework\Attributes\CoversMethod(\mod_assign\penalty\helper::class, 'apply_penalty_to_user')]
 #[\PHPUnit\Framework\Attributes\CoversMethod(\grade_item::class, 'update_raw_grade')]
 #[\PHPUnit\Framework\Attributes\CoversMethod(\assign::class, 'calculate_penalised_grade')]
