@@ -849,40 +849,7 @@ class mod_forum_external extends external_api {
             $cm, null);
 
         // Validate options.
-        $options = array(
-            'discussionsubscribe' => $discussionsubscribe,
-            'private'             => false,
-            'inlineattachmentsid' => 0,
-            'attachmentsid' => null,
-            'topreferredformat'   => false
-        );
-        foreach ($params['options'] as $option) {
-            $name = trim($option['name']);
-            switch ($name) {
-                case 'discussionsubscribe':
-                    $value = clean_param($option['value'], PARAM_BOOL);
-                    break;
-                case 'private':
-                    $value = clean_param($option['value'], PARAM_BOOL);
-                    break;
-                case 'inlineattachmentsid':
-                    $value = clean_param($option['value'], PARAM_INT);
-                    break;
-                case 'attachmentsid':
-                    $value = clean_param($option['value'], PARAM_INT);
-                    // Ensure that the user has permissions to create attachments.
-                    if (!has_capability('mod/forum:createattachment', $context)) {
-                        $value = 0;
-                    }
-                    break;
-                case 'topreferredformat':
-                    $value = clean_param($option['value'], PARAM_BOOL);
-                    break;
-                default:
-                    throw new moodle_exception('errorinvalidparam', 'webservice', '', $name);
-            }
-            $options[$name] = $value;
-        }
+        $options = self::validate_post_options($params['options'], $discussionsubscribe, $context);
 
         if (!$capabilitymanager->can_post_in_discussion($USER, $discussion)) {
             throw new moodle_exception('nopostforum', 'forum');
@@ -973,6 +940,53 @@ class mod_forum_external extends external_api {
         $result['post'] = $exportedpost;
         $result['messages'] = $message;
         return $result;
+    }
+
+    /**
+     * Validates the options sent with a new post and merges them over the defaults.
+     *
+     * @param array $options The options received, each one with 'name' and 'value'.
+     * @param bool $discussionsubscribe The user's default subscription to the discussion.
+     * @param \context $context The forum module context, to check the attachment capability.
+     * @return array The options to use for the post.
+     * @throws moodle_exception If an option is not recognised.
+     */
+    protected static function validate_post_options(array $options, $discussionsubscribe, \context $context): array {
+        $validated = array(
+            'discussionsubscribe' => $discussionsubscribe,
+            'private'             => false,
+            'inlineattachmentsid' => 0,
+            'attachmentsid' => null,
+            'topreferredformat'   => false
+        );
+        foreach ($options as $option) {
+            $name = trim($option['name']);
+            switch ($name) {
+                case 'discussionsubscribe':
+                    $value = clean_param($option['value'], PARAM_BOOL);
+                    break;
+                case 'private':
+                    $value = clean_param($option['value'], PARAM_BOOL);
+                    break;
+                case 'inlineattachmentsid':
+                    $value = clean_param($option['value'], PARAM_INT);
+                    break;
+                case 'attachmentsid':
+                    $value = clean_param($option['value'], PARAM_INT);
+                    // Ensure that the user has permissions to create attachments.
+                    if (!has_capability('mod/forum:createattachment', $context)) {
+                        $value = 0;
+                    }
+                    break;
+                case 'topreferredformat':
+                    $value = clean_param($option['value'], PARAM_BOOL);
+                    break;
+                default:
+                    throw new moodle_exception('errorinvalidparam', 'webservice', '', $name);
+            }
+            $validated[$name] = $value;
+        }
+        return $validated;
     }
 
     /**
