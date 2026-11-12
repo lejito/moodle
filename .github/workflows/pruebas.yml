@@ -136,6 +136,52 @@ jobs:
           path: reports/*.xml
           retention-days: 14
 
+  # Moodle desplegado con Docker dentro del runner, con los mismos Dockerfile y compose.yml del entorno
+  # local: instala el sitio, siembra los datos, habilita la API REST y lo sirve en http://localhost:8000.
+  # Las pruebas E2E y de API corren contra esta instancia. Va en paralelo a las pruebas unitarias.
+  despliegue:
+    name: Despliegue en Docker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMPOSE_FILE: compose.yml:compose.ci.yml
+    steps:
+      - uses: actions/checkout@v6
+
+      # vendor/ se instala en el runner y se monta en los contenedores (compose.ci.yml). Las extensiones
+      # las trae la imagen, no el PHP del runner.
+      - name: Dependencias de Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer
+          coverage: none
+      - run: composer install --no-dev --no-interaction --no-progress --prefer-dist --ignore-platform-req='ext-*'
+
+      - name: Imagen de PHP 8.4 con Apache
+        working-directory: pruebas/docker
+        run: |
+          cp config.php ../../config.php
+          docker compose build
+
+      - name: Instalar Moodle, sembrar los datos y habilitar la API REST
+        working-directory: pruebas/docker
+        run: |
+          docker compose run --rm -T moodle php admin/cli/install_database.php --agree-license --lang=en \
+            --fullname="Moodle de pruebas" --shortname="Pruebas" \
+            --adminuser=admin --adminpass='Pruebas-2026' --adminemail=admin@example.com
+          docker compose run --rm -T moodle php pruebas/seed/sembrar.php
+          docker compose run --rm -T moodle php pruebas/seed/servicios_web.php
+          docker compose up -d web
+
+      - name: Prueba de humo (interfaz y API REST)
+        run: bash pruebas/ci/humo.sh
+
+      - name: Registro de Apache si algo falla
+        if: failure()
+        working-directory: pruebas/docker
+        run: docker compose logs web
+
   quality:
     name: Análisis de calidad
     needs: phpunit

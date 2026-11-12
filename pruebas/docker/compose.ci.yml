@@ -1,0 +1,16 @@
+# Ajustes de compose.yml para GitHub Actions. Se combina con él:
+#
+#   COMPOSE_FILE=compose.yml:compose.ci.yml docker compose ...
+#
+# En el runner (Linux) montar la carpeta del repositorio es rápido, así que el código y vendor/ se montan
+# directamente desde el checkout, en lugar del volumen codigo que hace falta en Windows. Cada entrada
+# reemplaza la del mismo destino en compose.yml.
+x-codigo: &codigo
+  volumes:
+    - ../..:/var/www/moodle
+    - ../../vendor:/var/www/moodle/vendor
+
+services:
+  moodle: *codigo
+  web: *codigo
+  cron: *codigo
