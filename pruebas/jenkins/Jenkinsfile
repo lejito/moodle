@@ -47,6 +47,8 @@ pipeline {
       }
     }
 
+    // Los componentes de cada funcionalidad se repiten en pruebas/unitarias.sh, que corre
+    // las mismas pruebas en local, y en sonar-project.properties: si cambian aquí, allá también.
     stage('Pruebas unitarias') {
       stages {
         stage('RF-MOOD-01 · enrol_self') {

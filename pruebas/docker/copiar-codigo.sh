@@ -9,6 +9,15 @@
 # Copia los archivos versionados y los nuevos que git no ignora, más config.php,
 # que git ignora pero Moodle necesita. Con el repositorio en una carpeta de
 # Windows tarda unos 25 minutos (~68 000 archivos); se hace una sola vez.
+#
+# Después devuelve los finales de línea a LF. Git para Windows trae
+# core.autocrlf=true, así que en la carpeta de Windows casi todo queda con CRLF,
+# aunque git lo guarda con LF. Moodle corre en Linux, y algunas pruebas comparan
+# contra plantillas y archivos de datos tal cual: con CRLF fallan, aunque pasan en
+# Jenkins, que clona en Linux. Solo se tocan los archivos que git guarda con LF y
+# la carpeta tiene con CRLF (git ls-files --eol); los demás quedan igual.
+#
+#   bash pruebas/docker/copiar-codigo.sh --solo-lf   # solo esa conversión
 set -euo pipefail
 
 raiz=$(git rev-parse --show-toplevel)
@@ -19,9 +28,18 @@ if [ ! -f config.php ]; then
   exit 1
 fi
 
-{ git ls-files -co --exclude-standard -z; printf 'config.php\0'; } \
-  | tar --null -T - -cf - \
-  | docker compose -f pruebas/docker/compose.yml run --rm --no-deps -T moodle \
-      tar -xf - -C /var/www/moodle
+en_volumen() { docker compose -f pruebas/docker/compose.yml run --rm --no-deps -T moodle "$@"; }
 
-echo "Código copiado al volumen."
+if [ "${1:-}" != --solo-lf ]; then
+  { git ls-files -co --exclude-standard -z; printf 'config.php\0'; } \
+    | tar --null -T - -cf - \
+    | en_volumen tar -xf - -C /var/www/moodle
+  echo "Código copiado al volumen."
+fi
+
+echo "Pasando a LF los archivos que git guarda con LF (tarda un par de minutos)..."
+git ls-files -z --eol \
+  | grep -z $'^i/lf *w/crlf' \
+  | sed -z 's/^[^\t]*\t//' \
+  | en_volumen sh -c 'cd /var/www/moodle && xargs -0 -r sed -i "s/\r\$//"'
+echo "Finales de línea corregidos."
