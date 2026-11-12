@@ -35,7 +35,6 @@ use mod_forum\subscriptions;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[\PHPUnit\Framework\Attributes\CoversClass(\mod_forum\external\set_forum_subscription::class)]
-#[\PHPUnit\Framework\Attributes\CoversFunction('execute')]
 final class set_forum_subscription_test extends \core_external\tests\externallib_testcase {
     #[\Override]
     public function setUp(): void {

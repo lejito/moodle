@@ -32,7 +32,7 @@ use mod_forum\external\set_read_state;
  * @copyright  2026 Daniel Urena <daniel.urena@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-#[\PHPUnit\Framework\Attributes\CoversClass(external\set_read_state::class)]
+#[\PHPUnit\Framework\Attributes\CoversClass(\mod_forum\external\set_read_state::class)]
 final class set_read_state_test extends \core_external\tests\externallib_testcase {
     /**
      * Test setting the read/unread state for a post when manual control is allowed.
