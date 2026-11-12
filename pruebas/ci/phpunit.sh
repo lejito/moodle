@@ -15,6 +15,11 @@
 # backup y restauración lo ejecutan. Si la carpeta existe, se suma a la
 # cobertura con --coverage-filter, que agrega directorios a los del XML.
 #
+# Tampoco mide rule.php, donde está toda la lógica de las reglas de acceso del
+# cuestionario (quizaccess_*). --coverage-filter solo acepta carpetas, así que se
+# agrega la del subplugin; sus pruebas, idioma y db/ quedan fuera del análisis de
+# Sonar por sonar.exclusions y sonar.coverage.exclusions.
+#
 # Con cobertura, PHPUnit valida los atributos Covers*. Si una prueba declara un
 # objetivo que no existe, emite un aviso, descarta toda la cobertura de esa
 # prueba y el script falla a propósito: hay que corregir el atributo.
@@ -32,7 +37,10 @@ for dir in "$@"; do
   fi
   extra=()
   if [ -d "$dir/backup" ]; then
-    extra=(--coverage-filter "$PWD/$dir/backup")
+    extra+=(--coverage-filter "$PWD/$dir/backup")
+  fi
+  if [ -f "$dir/rule.php" ]; then
+    extra+=(--coverage-filter "$PWD/$dir")
   fi
   echo "::group::$dir"
   vendor/bin/phpunit -c "$dir" "${extra[@]}" \
