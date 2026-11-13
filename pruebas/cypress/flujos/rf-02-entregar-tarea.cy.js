@@ -52,22 +52,25 @@ describe('RF-MOOD-02 · Entregar una tarea', () => {
     cy.esperarMoodle();
   };
 
-  /**
-   * Un archivo de texto de exactamente `bytes` bytes, generado en memoria y relleno con su nombre.
-   * Cada archivo tiene así un contenido distinto: dos archivos iguales subidos casi a la vez chocan
-   * en Moodle al crear la misma carpeta del almacén de archivos («Cannot create local file pool
-   * directories»).
-   */
+  /** Un archivo de texto de exactamente `bytes` bytes, generado en memoria y relleno con su nombre. */
   const archivo = (nombre, bytes) => ({
     contents: Cypress.Buffer.alloc(bytes, nombre),
     fileName: nombre,
     mimeType: 'text/plain',
   });
 
-  /** Arrastra un archivo al gestor de archivos de la entrega. */
-  const subir = (unArchivo) => {
+  /**
+   * Arrastra un archivo al gestor de archivos de la entrega y espera la respuesta de la subida.
+   * Moodle muestra el nombre del archivo en cuanto empieza a subirlo, así que esperar el nombre no
+   * basta: dos subidas a la vez chocan en Moodle (ver el hallazgo en el documento de RF-MOOD-02).
+   */
+  const subir = (unArchivo, { seEnvia = true } = {}) => {
+    cy.intercept('POST', '**/repository/repository_ajax.php?action=upload*').as('subida');
     cy.get('.filemanager .filemanager-container').first()
       .selectFile(unArchivo, { action: 'drag-drop', force: true });
+    if (seEnvia) {
+      cy.wait('@subida');
+    }
   };
 
   /** Una frase de `n` palabras. */
@@ -154,7 +157,8 @@ describe('RF-MOOD-02 · Entregar una tarea', () => {
   it('MOOD-CP-208 - rechaza un archivo de 1 MB más un byte', () => {
     prepararYAbrir('MOOD-CP-208');
     abrirFormulario();
-    subir(archivo('un-mega-y-un-byte.txt', MEGA + 1));
+    // Moodle lo rechaza en el navegador, antes de enviarlo.
+    subir(archivo('un-mega-y-un-byte.txt', MEGA + 1), { seEnvia: false });
     cy.contains(/too large/i).should('be.visible');
     cy.get('.filemanager .fp-content').should('not.contain', 'un-mega-y-un-byte.txt');
   });

@@ -2,6 +2,7 @@ configuration-as-code
 job-dsl
 workflow-aggregator
 pipeline-graph-view
+pipeline-stage-view
 git
 junit
 credentials-binding
