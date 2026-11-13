@@ -70,6 +70,7 @@ foreach (array_keys(USUARIOS) as $usuario) {
 $datos = match ((int) $partes[1]) {
     1 => preparar_rf01($caso, $curso, $usuarios),
     2 => preparar_rf02($caso, $curso, $usuarios),
+    3 => preparar_rf03($caso, $curso, $usuarios),
     default => cli_error("Todavía no hay preparación para los casos de RF-MOOD-0{$partes[1]}."),
 };
 
@@ -201,7 +202,7 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
         'duedate' => $ahora + 7 * DAYSECS,
         'cutoffdate' => $ahora + 14 * DAYSECS,
     ];
-    $ajustes = ['requiresubmissionstatement' => 0];
+    $ajustes = ['requiresubmissionstatement' => 0, 'markingworkflow' => 0];
     $palabras = 0;
     $entrega = null;
     $bloquear = false;
@@ -282,6 +283,68 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
     return [
         'tarea' => (int) $tarea->get_course_module()->id,
         'nombreTarea' => TAREA,
+    ];
+}
+
+/**
+ * RF-MOOD-03, calificar una entrega.
+ *
+ * Parte de la tarea restablecida de RF-MOOD-02 (sin entregas ni notas, sin flujo de calificación)
+ * y, salvo en los casos que dicen otra cosa, con un texto de estudiante.a enviado para calificar.
+ *
+ * @param string $caso
+ * @param stdClass $curso
+ * @param stdClass[] $usuarios
+ * @return array
+ */
+function preparar_rf03(string $caso, stdClass $curso, array $usuarios): array {
+    global $CFG, $DB;
+    require_once($CFG->libdir . '/gradelib.php');
+    borrar_usuarios_de_apoyo();
+    $datos = preparar_rf02('MOOD-CP-213', $curso, $usuarios);
+    $registro = $DB->get_record('assign', ['course' => $curso->id, 'name' => TAREA], '*', MUST_EXIST);
+    $estudiante = $usuarios['estudiante.a'];
+
+    if ($caso === 'MOOD-CP-309' || $caso === 'MOOD-CP-314') {
+        // Sin entrega: se restablece otra vez sin el texto enviado.
+        $datos = preparar_rf02('MOOD-CP-201', $curso, $usuarios);
+    }
+    if ($caso === 'MOOD-CP-312') {
+        $DB->set_field('assign', 'markingworkflow', 1, ['id' => $registro->id]);
+    }
+
+    $tarea = tarea($registro->id, $curso);
+    $calificar = function (int $userid, float $nota) use ($tarea, $usuarios): void {
+        \core\session\manager::set_user($usuarios['docente']);
+        $tarea->save_grade($userid, (object) ['grade' => $nota, 'attemptnumber' => -1]);
+        \core\session\manager::set_user(get_admin());
+    };
+    $apoyo = null;
+    switch ($caso) {
+        case 'MOOD-CP-310':
+            $calificar($estudiante->id, 80);
+            break;
+        case 'MOOD-CP-313':
+            $calificar($estudiante->id, 60);
+            $item = grade_item::fetch([
+                'courseid' => $curso->id,
+                'itemtype' => 'mod',
+                'itemmodule' => 'assign',
+                'iteminstance' => $registro->id,
+                'itemnumber' => 0,
+            ]);
+            grade_grade::fetch(['itemid' => $item->id, 'userid' => $estudiante->id])->set_locked(1);
+            break;
+        case 'MOOD-CP-315':
+            $apoyo = crear_usuario_de_apoyo(1);
+            enrol_try_internal_enrol($curso->id, $apoyo->id, $DB->get_field('role', 'id', ['shortname' => 'student']));
+            $calificar($apoyo->id, 50);
+            break;
+    }
+
+    return $datos + [
+        'estudiante' => (int) $estudiante->id,
+        'apoyo' => $apoyo ? (int) $apoyo->id : null,
     ];
 }
 

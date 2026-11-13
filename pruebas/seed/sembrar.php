@@ -58,6 +58,11 @@ $DB->set_field('tool_usertours_tours', 'enabled', 0);
 // entrega, bienvenida, foro) dejaría un mensaje de depuración en la página.
 \core\plugininfo\message::enable_plugin('email', 0);
 
+// Eventos de prórroga que quedaron sin su tarea al borrar el curso en una siembra anterior: Moodle no
+// los borra con el curso y el tablero del estudiante falla con error 500 (hallazgo de RF-MOOD-02).
+$DB->delete_records_select('event', "modulename = 'assign' AND eventtype = 'extension'
+    AND NOT EXISTS (SELECT 1 FROM {assign} a WHERE a.id = {event}.instance)");
+
 // 1. Curso: se recrea desde cero para que cada corrida parta del mismo estado.
 // La papelera de reciclaje respaldaría el curso borrado en cada siembra; en
 // este sitio de laboratorio no hace falta.
@@ -120,6 +125,7 @@ $tarea = $generator->create_module('assign', [
     'assignsubmission_file_enabled' => 1,
     'assignsubmission_file_maxfiles' => 2,
     'assignsubmission_file_maxsizebytes' => 1048576,
+    'assignfeedback_comments_enabled' => 1, // El docente deja un comentario al calificar (RF-MOOD-03).
     'submissiondrafts' => 1, // El estudiante confirma con "Enviar para calificar".
     'allowsubmissionsfromdate' => $ahora - $dia,
     'duedate' => $ahora + 7 * $dia,

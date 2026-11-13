@@ -7,17 +7,26 @@
 Cypress.Commands.add('preparar', (caso) => cy.task('preparar', caso, { timeout: 60000 }));
 
 /**
- * Inicia sesión con el formulario de Moodle. La sesión de cada usuario se reutiliza entre
- * pruebas (cy.session) y se valida antes de usarla.
+ * Inicia sesión enviando el formulario de entrada de Moodle con su token (logintoken), sin
+ * escribir en la página: el formulario cambia sus campos mientras carga su JavaScript y a veces
+ * la contraseña quedaba a medias. Entrar no es parte de ninguna funcionalidad bajo prueba. La
+ * sesión de cada usuario se reutiliza entre pruebas (cy.session) y se valida antes de usarla.
  */
 Cypress.Commands.add('iniciarSesion', (usuario, contrasena) => {
   cy.session(usuario, () => {
-    cy.visit('/login/index.php');
-    cy.esperarMoodle();
-    cy.get('#username').type(usuario);
-    cy.get('#password').type(contrasena, { log: false });
-    cy.get('#loginbtn').click();
-    cy.location('pathname').should('not.include', '/login/');
+    cy.request('/login/index.php').its('body').then((html) => {
+      const token = html.match(/name="logintoken" value="([^"]+)"/)[1];
+      cy.request({
+        method: 'POST',
+        url: '/login/index.php',
+        form: true,
+        body: { username: usuario, password: contrasena, logintoken: token },
+        // Se sigue la redirección de Moodle tras entrar: consume el destino pendiente de la sesión
+        // (wantsurl), que si no se usa después y desvía otras páginas. Si esa página falla, la
+        // validación de la sesión lo detecta igual.
+        failOnStatusCode: false,
+      });
+    });
   }, {
     validate() {
       cy.request({ url: '/user/profile.php', followRedirect: false })
