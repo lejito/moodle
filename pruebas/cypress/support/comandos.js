@@ -1,4 +1,4 @@
-// Comandos comunes a las pruebas E2E.
+// Comandos comunes a las pruebas E2E y de API.
 
 /**
  * Deja el sitio como lo necesita el caso (pruebas/seed/preparar.php) y entrega sus datos:
@@ -54,4 +54,38 @@ Cypress.Commands.add('esperarMoodle', () => {
 Cypress.Commands.add('abrir', (url) => {
   cy.visit(url);
   cy.esperarMoodle();
+});
+
+/**
+ * Aplana los parámetros de una función externa al formato de formulario que espera el servidor
+ * REST de Moodle: { datos: [{ nombre: 'x' }] } pasa a { 'datos[0][nombre]': 'x' }.
+ */
+const aplanar = (valor, prefijo, salida = {}) => {
+  if (valor !== null && typeof valor === 'object') {
+    Object.entries(valor).forEach(([clave, interno]) => {
+      aplanar(interno, prefijo ? `${prefijo}[${clave}]` : clave, salida);
+    });
+  } else if (valor !== undefined) {
+    salida[prefijo] = valor === true ? 1 : valor === false ? 0 : valor;
+  }
+  return salida;
+};
+
+/**
+ * Llama a una función externa por el servidor REST (/webservice/rest/server.php), con el token de
+ * un usuario, y entrega el cuerpo JSON de la respuesta. Moodle responde siempre con HTTP 200: los
+ * errores llegan en el cuerpo, como warnings o como { exception, errorcode, message }.
+ */
+Cypress.Commands.add('servicioWeb', (token, funcion, parametros = {}) => {
+  Cypress.log({ name: 'servicioWeb', message: funcion });
+  return cy.request({
+    method: 'POST',
+    url: '/webservice/rest/server.php',
+    form: true,
+    log: false,
+    body: { wstoken: token, wsfunction: funcion, moodlewsrestformat: 'json', ...aplanar(parametros) },
+  }).then((respuesta) => {
+    expect(respuesta.status, `HTTP de ${funcion}`).to.eq(200);
+    return respuesta.body;
+  });
 });

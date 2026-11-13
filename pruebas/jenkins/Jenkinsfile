@@ -5,11 +5,16 @@
 //   3. Despliegue: una imagen de Moodle con este código, instalada y sembrada desde cero, en
 //      http://localhost:8000 (o el puerto de PUERTO en .env).
 //   4. Prueba de humo: la interfaz y la API REST del Moodle desplegado responden.
-//   5. Pruebas E2E: Cypress contra el Moodle desplegado (pruebas/cypress).
+//   5. Pruebas E2E: Cypress contra el Moodle desplegado (pruebas/cypress/flujos).
+//   6. Pruebas de API: Cypress contra los servicios web REST del Moodle desplegado (pruebas/cypress/api).
 //
 // Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
 // juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
-// anterior; el análisis y el despliegue solo corren si todas pasaron.
+// anterior; el análisis y el despliegue solo corren si todas pasaron, y las suites de Cypress, si el
+// despliegue pasó la prueba de humo.
+//
+// OMITIR, en el .env de Jenkins, lista etapas que el pipeline se salta (unitarias, calidad, e2e, api),
+// para probar una nueva sin esperar las demás. Vacío, que es lo normal, corre todo.
 
 def pruebas(String nombre, String carpetas) {
   catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
@@ -19,6 +24,38 @@ def pruebas(String nombre, String carpetas) {
 
 def todoBien() {
   return currentBuild.currentResult == 'SUCCESS'
+}
+
+/** Si la etapa está en OMITIR. Las pruebas unitarias se llevan con ellas el análisis, que usa su cobertura. */
+def omitir(String etapa) {
+  def omitidas = (env.OMITIR ?: '').split(',')*.trim()
+  return etapa in omitidas || (etapa == 'calidad' && 'unitarias' in omitidas)
+}
+
+/**
+ * Corre una suite de Cypress en un contenedor que comparte la red del Moodle desplegado: ahí
+ * localhost:PUERTO es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso se prepara con
+ * preparar.php, por docker exec en ese mismo contenedor. Publica el JUnit y archiva el reporte HTML.
+ */
+def cypress(String suite, String configuracion) {
+  try {
+    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+      sh 'docker build -q -t moodle-pruebas/cypress:16.2.1 -f pruebas/docker/cypress.Dockerfile pruebas/docker'
+      sh "rm -rf pruebas/reportes/${suite}"
+      sh """
+        docker run --rm --volumes-from "\$(hostname)" -w "\$WORKSPACE/pruebas" \
+          --network container:moodle-despliegue-web-1 \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -e MOODLE_URL="http://localhost:\$PUERTO" \
+          -e PREPARAR="docker exec moodle-despliegue-web-1 php pruebas/seed/preparar.php" \
+          moodle-pruebas/cypress:16.2.1 sh ci/cypress.sh ${configuracion}
+      """
+    }
+  } finally {
+    junit allowEmptyResults: true, testResults: "pruebas/reportes/${suite}/junit/*.xml"
+    archiveArtifacts allowEmptyArchive: true, artifacts: "pruebas/reportes/${suite}/**"
+    sh 'docker run --rm --volumes-from "$(hostname)" alpine:3.22 chown -R "$(id -u):$(id -g)" "$WORKSPACE/pruebas"'
+  }
 }
 
 pipeline {
@@ -37,6 +74,7 @@ pipeline {
 
   stages {
     stage('Preparar el sitio de pruebas') {
+      when { expression { !omitir('unitarias') } }
       steps {
         sh 'docker build -t moodle-pruebas/php:8.4 pruebas/docker'
         sh 'rm -rf coverage reports && cp pruebas/docker/config.php config.php'
@@ -51,6 +89,7 @@ pipeline {
     // Los componentes de cada funcionalidad se repiten en pruebas/unitarias.sh, que corre
     // las mismas pruebas en local, y en sonar-project.properties: si cambian aquí, allá también.
     stage('Pruebas unitarias') {
+      when { expression { !omitir('unitarias') } }
       stages {
         stage('RF-MOOD-01 · enrol_self') {
           steps { script { pruebas('enrol_self', 'public/enrol/self') } }
@@ -95,7 +134,7 @@ pipeline {
     }
 
     stage('Análisis de calidad') {
-      when { expression { todoBien() } }
+      when { expression { todoBien() && !omitir('calidad') } }
       steps {
         // El escáner corre en su propio contenedor, sobre el mismo clon. qualitygate.wait espera el
         // resultado del umbral y hace fallar el build si no se cumple.
@@ -146,34 +185,19 @@ pipeline {
           HUMO_CONECTAR="localhost:$PUERTO:host.docker.internal:$PUERTO" \
             bash pruebas/ci/humo.sh "http://localhost:$PUERTO" pruebas/reportes/servicios-web.json
         '''
+        script { env.DESPLEGADO = 'si' }
       }
     }
 
-    // Cypress corre en un contenedor que comparte la red del Moodle desplegado: ahí localhost:PUERTO
-    // es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso se prepara con preparar.php,
-    // por docker exec en ese mismo contenedor.
+    // E2E y API son independientes: la de API corre aunque falle la E2E.
     stage('Pruebas E2E') {
-      when { expression { todoBien() } }
-      steps {
-        sh '''
-          docker build -t moodle-pruebas/cypress:16.2.1 -f pruebas/docker/cypress.Dockerfile pruebas/docker
-          rm -rf pruebas/reportes/e2e
-          docker run --rm --volumes-from "$(hostname)" -w "$WORKSPACE/pruebas" \
-            --network container:moodle-despliegue-web-1 \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -e MOODLE_URL="http://localhost:$PUERTO" \
-            -e PREPARAR="docker exec moodle-despliegue-web-1 php pruebas/seed/preparar.php" \
-            moodle-pruebas/cypress:16.2.1 \
-            sh -c 'npm ci --no-audit --no-fund && npx cypress run'
-        '''
-      }
-      post {
-        always {
-          junit allowEmptyResults: true, testResults: 'pruebas/reportes/e2e/junit/*.xml'
-          archiveArtifacts allowEmptyArchive: true, artifacts: 'pruebas/reportes/e2e/**'
-          sh 'docker run --rm --volumes-from "$(hostname)" alpine:3.22 chown -R "$(id -u):$(id -g)" "$WORKSPACE/pruebas"'
-        }
-      }
+      when { expression { env.DESPLEGADO == 'si' && !omitir('e2e') } }
+      steps { script { cypress('e2e', 'cypress.config.js') } }
+    }
+
+    stage('Pruebas de API') {
+      when { expression { env.DESPLEGADO == 'si' && !omitir('api') } }
+      steps { script { cypress('api', 'cypress.api.config.js') } }
     }
   }
 

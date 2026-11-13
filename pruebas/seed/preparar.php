@@ -26,7 +26,11 @@
  *
  *   php pruebas/seed/preparar.php MOOD-CP-114
  *
- * Requiere que el sitio esté sembrado (sembrar.php).
+ * Los casos de API (MOOD-CP-N51 en adelante) reutilizan la preparación de un caso E2E, la de
+ * MISMA_PREPARACION, y leen de la salida los tokens del servicio web y los IDs de usuarios y
+ * actividades.
+ *
+ * Requiere que el sitio esté sembrado (sembrar.php) y, para los tokens, servicios_web.php.
  *
  * @package    core
  * @copyright  2026 Juan Sebastian Ospina Lora
@@ -49,6 +53,39 @@ const GRUPO_A = 'Grupo A';
 const CLAVE_GRUPO_A = 'Grupo-A-2026';
 /** Cohorte de los casos con restricción por cohorte (RF-MOOD-01). */
 const COHORTE = 'Cohorte de laboratorio';
+/** Servicio web de las pruebas de API, el que crea servicios_web.php. */
+const SERVICIO = 'pruebas';
+
+/**
+ * Casos de API que parten del mismo estado que un caso E2E: usan su preparación. Los que no están
+ * aquí parten del estado sembrado.
+ */
+const MISMA_PREPARACION = [
+    'MOOD-CP-155' => 'MOOD-CP-106',
+    'MOOD-CP-156' => 'MOOD-CP-110',
+    'MOOD-CP-157' => 'MOOD-CP-111-fin',
+    'MOOD-CP-158' => 'MOOD-CP-116',
+    'MOOD-CP-254' => 'MOOD-CP-209',
+    'MOOD-CP-255' => 'MOOD-CP-211',
+    'MOOD-CP-256' => 'MOOD-CP-212',
+    'MOOD-CP-257' => 'MOOD-CP-204',
+    'MOOD-CP-258' => 'MOOD-CP-214',
+    'MOOD-CP-259' => 'MOOD-CP-215',
+    'MOOD-CP-357' => 'MOOD-CP-313',
+    'MOOD-CP-359' => 'MOOD-CP-310',
+    'MOOD-CP-455' => 'MOOD-CP-407',
+    'MOOD-CP-456' => 'MOOD-CP-408',
+    'MOOD-CP-457' => 'MOOD-CP-410',
+    'MOOD-CP-458' => 'MOOD-CP-411',
+    'MOOD-CP-459' => 'MOOD-CP-412',
+    'MOOD-CP-554' => 'MOOD-CP-506',
+    'MOOD-CP-555' => 'MOOD-CP-508',
+    'MOOD-CP-556' => 'MOOD-CP-509',
+    'MOOD-CP-557' => 'MOOD-CP-510',
+    'MOOD-CP-558' => 'MOOD-CP-511',
+    'MOOD-CP-559' => 'MOOD-CP-513',
+    'MOOD-CP-560' => 'MOOD-CP-507',
+];
 
 [$opciones, $sueltos] = cli_get_params([], []);
 $caso = $sueltos[0] ?? '';
@@ -67,12 +104,13 @@ foreach (array_keys(USUARIOS) as $usuario) {
     $usuarios[$usuario] = $DB->get_record('user', ['username' => $usuario, 'deleted' => 0], '*', MUST_EXIST);
 }
 
+$preparacion = MISMA_PREPARACION[$caso] ?? $caso;
 $datos = match ((int) $partes[1]) {
-    1 => preparar_rf01($caso, $curso, $usuarios),
-    2 => preparar_rf02($caso, $curso, $usuarios),
-    3 => preparar_rf03($caso, $curso, $usuarios),
-    4 => preparar_rf04($caso, $curso, $usuarios),
-    5 => preparar_rf05($caso, $curso, $usuarios),
+    1 => preparar_rf01($preparacion, $curso, $usuarios),
+    2 => preparar_rf02($preparacion, $curso, $usuarios),
+    3 => preparar_rf03($preparacion, $curso, $usuarios),
+    4 => preparar_rf04($preparacion, $curso, $usuarios),
+    5 => preparar_rf05($preparacion, $curso, $usuarios),
     default => cli_error("Todavía no hay preparación para los casos de RF-MOOD-0{$partes[1]}."),
 };
 
@@ -80,7 +118,34 @@ cli_writeln(json_encode($datos + [
     'caso' => $caso,
     'curso' => (int) $curso->id,
     'contrasena' => CONTRASENA,
+    'usuarios' => array_map(fn($usuario) => (int) $usuario->id, $usuarios),
+    'tokens' => tokens($usuarios),
 ], JSON_UNESCAPED_UNICODE));
+
+/**
+ * Los tokens de los usuarios sembrados para el servicio web de las pruebas de API.
+ *
+ * Vacío si no se corrió servicios_web.php.
+ *
+ * @param stdClass[] $usuarios
+ * @return array usuario => token
+ */
+function tokens(array $usuarios): array {
+    global $DB;
+    $servicio = $DB->get_field('external_services', 'id', ['shortname' => SERVICIO]);
+    if (!$servicio) {
+        return [];
+    }
+    $tokens = [];
+    foreach ($usuarios as $nombre => $usuario) {
+        $token = $DB->get_field('external_tokens', 'token',
+            ['userid' => $usuario->id, 'externalserviceid' => $servicio], IGNORE_MULTIPLE);
+        if ($token) {
+            $tokens[$nombre] = $token;
+        }
+    }
+    return $tokens;
+}
 
 /**
  * RF-MOOD-01, automatricularse con clave.
@@ -174,6 +239,7 @@ function preparar_rf01(string $caso, stdClass $curso, array $usuarios): array {
     }
 
     return [
+        'instancia' => (int) $instancia->id,
         'clave' => CLAVE_MATRICULA,
         'claveGrupo' => CLAVE_GRUPO_A,
         'grupo' => GRUPO_A,
@@ -284,6 +350,7 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
 
     return [
         'tarea' => (int) $tarea->get_course_module()->id,
+        'idTarea' => (int) $registro->id,
         'nombreTarea' => TAREA,
     ];
 }
@@ -414,6 +481,7 @@ function preparar_rf04(string $caso, stdClass $curso, array $usuarios): array {
     $cm = get_coursemodule_from_instance('quiz', $quiz->id, $curso->id, false, MUST_EXIST);
     return [
         'cuestionario' => (int) $cm->id,
+        'idCuestionario' => (int) $quiz->id,
         'contrasenaCuestionario' => 'Quiz-2026',
     ];
 }
@@ -486,6 +554,7 @@ function preparar_rf05(string $caso, stdClass $curso, array $usuarios): array {
     $datos = [
         'foro' => (int) $cm->id,
         'debate' => (int) $inicial->id,
+        'mensaje' => (int) $inicial->firstpost,
         'nombreDebate' => DEBATE,
     ];
     $grupo = function (string $nombre, array $miembros) use ($curso): int {
@@ -505,6 +574,7 @@ function preparar_rf05(string $caso, stdClass $curso, array $usuarios): array {
                 'message' => 'Mañana no hay clase.',
             ]);
             $datos['aviso'] = (int) $aviso->id;
+            $datos['mensajeAviso'] = (int) $aviso->firstpost;
             break;
         case 'MOOD-CP-507':
             $DB->update_record('forum', (object) [
@@ -537,6 +607,7 @@ function preparar_rf05(string $caso, stdClass $curso, array $usuarios): array {
                 'message' => 'Debate solo para un grupo.',
             ]);
             $datos['debateGrupo'] = (int) $debate->id;
+            $datos['mensajeGrupo'] = (int) $debate->firstpost;
             break;
         case 'MOOD-CP-513':
             assign_capability('mod/forum:replypost', CAP_PREVENT, $rolestudiante, $contexto->id, true);

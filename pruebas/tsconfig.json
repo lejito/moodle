@@ -7,6 +7,7 @@
   },
   "include": [
     "cypress/**/*.js",
-    "cypress.config.js"
+    "cypress.config.js",
+    "cypress.api.config.js"
   ]
 }

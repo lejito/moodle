@@ -1,7 +1,7 @@
 {
   "name": "moodle-pruebas",
   "private": true,
-  "description": "Pruebas E2E del proyecto de pruebas sobre Moodle (Cypress). Van aparte de las dependencias de Moodle.",
+  "description": "Pruebas E2E y de API del proyecto de pruebas sobre Moodle (Cypress). Van aparte de las dependencias de Moodle.",
   "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=22"
@@ -13,7 +13,14 @@
     "e2e:rf-02": "cypress run --spec cypress/flujos/rf-02-*.cy.js",
     "e2e:rf-03": "cypress run --spec cypress/flujos/rf-03-*.cy.js",
     "e2e:rf-04": "cypress run --spec cypress/flujos/rf-04-*.cy.js",
-    "e2e:rf-05": "cypress run --spec cypress/flujos/rf-05-*.cy.js"
+    "e2e:rf-05": "cypress run --spec cypress/flujos/rf-05-*.cy.js",
+    "api": "cypress run --config-file cypress.api.config.js",
+    "api:abrir": "cypress open --e2e --browser electron --config-file cypress.api.config.js",
+    "api:rf-01": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-01-*.cy.js",
+    "api:rf-02": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-02-*.cy.js",
+    "api:rf-03": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-03-*.cy.js",
+    "api:rf-04": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-04-*.cy.js",
+    "api:rf-05": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-05-*.cy.js"
   },
   "devDependencies": {
     "cypress": "16.2.1",
