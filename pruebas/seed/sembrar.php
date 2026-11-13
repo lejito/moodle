@@ -54,6 +54,10 @@ $dia = DAYSECS;
 $DB->set_field('tool_usertours_tours', 'enabled', 0);
 \tool_usertours\cache::notify_tour_change();
 
+// Sin salida de mensajes por correo: el sitio no tiene servidor de correo, y cada aviso (recibo de
+// entrega, bienvenida, foro) dejaría un mensaje de depuración en la página.
+\core\plugininfo\message::enable_plugin('email', 0);
+
 // 1. Curso: se recrea desde cero para que cada corrida parta del mismo estado.
 // La papelera de reciclaje respaldaría el curso borrado en cada siembra; en
 // este sitio de laboratorio no hace falta.
@@ -102,12 +106,15 @@ foreach (USUARIOS as $usuario => $datos) {
     if ($datos['rol']) {
         $generator->enrol_user($ids[$usuario], $curso->id, $datos['rol']);
     }
+    // Editor de texto plano (Preferencias > Editor): las pruebas E2E escriben la entrega y las
+    // respuestas del foro en un área de texto, sin pasar por el iframe de TinyMCE.
+    set_user_preference('htmleditor', 'textarea', $ids[$usuario]);
 }
 
 // 4. Tarea (RF-MOOD-02 y 03): texto en línea y archivo, calificada sobre 100.
 $tarea = $generator->create_module('assign', [
     'course' => $curso->id,
-    'name' => 'Tarea de laboratorio',
+    'name' => TAREA,
     'intro' => 'Entregue un texto corto o un archivo.',
     'assignsubmission_onlinetext_enabled' => 1,
     'assignsubmission_file_enabled' => 1,
@@ -124,7 +131,7 @@ $tarea = $generator->create_module('assign', [
 // 5. Cuestionario (RF-MOOD-04): tres preguntas del banco del curso, dos intentos.
 $cuestionario = $generator->create_module('quiz', [
     'course' => $curso->id,
-    'name' => 'Cuestionario de laboratorio',
+    'name' => CUESTIONARIO,
     'intro' => 'Tres preguntas de práctica.',
     'timeopen' => $ahora - $dia,
     'timeclose' => $ahora + 7 * $dia,
@@ -145,7 +152,7 @@ foreach (['truefalse', 'shortanswer', 'numerical'] as $tipo) {
 // 6. Foro (RF-MOOD-05): un foro general con un debate abierto por el docente.
 $foro = $generator->create_module('forum', [
     'course' => $curso->id,
-    'name' => 'Foro de laboratorio',
+    'name' => FORO,
     'intro' => 'Espacio para discutir los temas del curso.',
     'type' => 'general',
 ]);
@@ -153,7 +160,7 @@ $debate = $generator->get_plugin_generator('mod_forum')->create_discussion([
     'course' => $curso->id,
     'forum' => $foro->id,
     'userid' => $ids['docente'],
-    'name' => 'Debate inicial',
+    'name' => DEBATE,
     'message' => '¿Qué esperan aprender en este curso?',
 ]);
 

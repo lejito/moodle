@@ -30,6 +30,10 @@ const CURSO_CORTO = 'LAB-PRUEBAS';
 const CURSO_NOMBRE = 'Laboratorio de pruebas de software';
 const CLAVE_MATRICULA = 'Clave-2026';
 const CONTRASENA = 'Pruebas-2026';
+const TAREA = 'Tarea de laboratorio';
+const CUESTIONARIO = 'Cuestionario de laboratorio';
+const FORO = 'Foro de laboratorio';
+const DEBATE = 'Debate inicial';
 const USUARIOS = [
     // Matriculado como estudiante: entrega, presenta el cuestionario y participa en el foro.
     'estudiante.a' => ['firstname' => 'Ana', 'lastname' => 'Estudiante', 'rol' => 'student'],

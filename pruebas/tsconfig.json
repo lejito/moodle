@@ -1,0 +1,12 @@
+{
+  "// Por qué": "Cypress busca un tsconfig.json desde cada prueba hacia arriba. Sin este, encuentra el de Moodle en la raíz, que extiende tsconfig.aliases.json, un archivo que genera Grunt y no está en un clon nuevo (Jenkins).",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true
+  },
+  "include": [
+    "cypress/**/*.js",
+    "cypress.config.js"
+  ]
+}

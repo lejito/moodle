@@ -56,6 +56,8 @@ $CFG->debugdisplay = 1;
 // Sitio de laboratorio sin servidor de correo: Moodle no intenta enviar correos (bienvenida al
 // matricularse, avisos del foro), que fallarían y llenarían las páginas y la salida de errores.
 $CFG->noemailever = true;
+// Remitente de los mensajes del sitio; sin él, cada aviso que no se envía deja una advertencia.
+$CFG->noreplyaddress = 'noreply@example.com';
 $CFG->routerconfigured = true;
 
 require_once(__DIR__ . '/lib/setup.php');

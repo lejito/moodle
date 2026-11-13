@@ -69,6 +69,7 @@ foreach (array_keys(USUARIOS) as $usuario) {
 
 $datos = match ((int) $partes[1]) {
     1 => preparar_rf01($caso, $curso, $usuarios),
+    2 => preparar_rf02($caso, $curso, $usuarios),
     default => cli_error("Todavía no hay preparación para los casos de RF-MOOD-0{$partes[1]}."),
 };
 
@@ -175,6 +176,127 @@ function preparar_rf01(string $caso, stdClass $curso, array $usuarios): array {
         'grupo' => GRUPO_A,
         'cohorte' => COHORTE,
     ];
+}
+
+/**
+ * RF-MOOD-02, entregar una tarea.
+ *
+ * Restablece la «Tarea de laboratorio» como la sembró sembrar.php (abrió ayer, vence en 7 días,
+ * corta en 14, sin límite de palabras ni declaración) y sin entregas, notas, prórrogas ni
+ * bloqueos de nadie.
+ *
+ * @param string $caso
+ * @param stdClass $curso
+ * @param stdClass[] $usuarios
+ * @return array
+ */
+function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
+    global $DB;
+    $ahora = time();
+    $estudiante = $usuarios['estudiante.a'];
+    $registro = $DB->get_record('assign', ['course' => $curso->id, 'name' => TAREA], '*', MUST_EXIST);
+
+    $fechas = [
+        'allowsubmissionsfromdate' => $ahora - DAYSECS,
+        'duedate' => $ahora + 7 * DAYSECS,
+        'cutoffdate' => $ahora + 14 * DAYSECS,
+    ];
+    $ajustes = ['requiresubmissionstatement' => 0];
+    $palabras = 0;
+    $entrega = null;
+    $bloquear = false;
+    $prorroga = 0;
+    switch ($caso) {
+        case 'MOOD-CP-203':
+        case 'MOOD-CP-204':
+            $palabras = 10;
+            break;
+        case 'MOOD-CP-209':
+            $fechas['allowsubmissionsfromdate'] = $ahora + DAYSECS;
+            break;
+        case 'MOOD-CP-210':
+            $fechas['duedate'] = $ahora - DAYSECS;
+            $fechas['cutoffdate'] = $ahora + 7 * DAYSECS;
+            break;
+        case 'MOOD-CP-211':
+        case 'MOOD-CP-212':
+            $fechas['allowsubmissionsfromdate'] = $ahora - 7 * DAYSECS;
+            $fechas['duedate'] = $ahora - DAYSECS;
+            $fechas['cutoffdate'] = $ahora - DAYSECS;
+            if ($caso === 'MOOD-CP-212') {
+                $prorroga = $ahora + DAYSECS;
+            }
+            break;
+        case 'MOOD-CP-213':
+            $entrega = 'enviada';
+            break;
+        case 'MOOD-CP-214':
+            $entrega = 'borrador';
+            $bloquear = true;
+            break;
+        case 'MOOD-CP-215':
+        case 'MOOD-CP-216':
+            $ajustes['requiresubmissionstatement'] = 1;
+            $entrega = 'borrador';
+            break;
+    }
+    $DB->update_record('assign', (object) (['id' => $registro->id] + $fechas + $ajustes));
+    rebuild_course_cache($curso->id, true);
+
+    $tarea = tarea($registro->id, $curso);
+    $tarea->reset_userdata((object) [
+        'courseid' => $curso->id,
+        'reset_assign_submissions' => 1,
+        'reset_gradebook_grades' => 1,
+        'reset_assign_user_overrides' => 1,
+        'timeshift' => 0,
+    ]);
+    $texto = $tarea->get_submission_plugin_by_type('onlinetext');
+    $texto->set_config('wordlimitenabled', $palabras ? 1 : 0);
+    $texto->set_config('wordlimit', $palabras);
+
+    $tarea = tarea($registro->id, $curso);
+    if ($entrega) {
+        \core\session\manager::set_user($estudiante);
+        $datos = (object) [
+            'userid' => $estudiante->id,
+            'onlinetext_editor' => [
+                'itemid' => file_get_unused_draft_itemid(),
+                'text' => 'Entrega preparada para el caso ' . $caso,
+                'format' => FORMAT_HTML,
+            ],
+        ];
+        $tarea->save_submission($datos, $avisos);
+        if ($entrega === 'enviada') {
+            $tarea->submit_for_grading((object) ['userid' => $estudiante->id], []);
+        }
+        \core\session\manager::set_user(get_admin());
+    }
+    if ($bloquear) {
+        $tarea->lock_submission($estudiante->id);
+    }
+    if ($prorroga) {
+        $tarea->save_user_extension($estudiante->id, $prorroga);
+    }
+
+    return [
+        'tarea' => (int) $tarea->get_course_module()->id,
+        'nombreTarea' => TAREA,
+    ];
+}
+
+/**
+ * La tarea, recién leída de la base (para que vea los cambios de la preparación).
+ *
+ * @param int $id
+ * @param stdClass $curso
+ * @return assign
+ */
+function tarea(int $id, stdClass $curso): assign {
+    global $CFG;
+    require_once($CFG->dirroot . '/mod/assign/locallib.php');
+    $cm = get_coursemodule_from_instance('assign', $id, $curso->id, false, MUST_EXIST);
+    return new assign(context_module::instance($cm->id), $cm, $curso);
 }
 
 /**
