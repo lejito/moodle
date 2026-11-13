@@ -1,7 +1,7 @@
 {
   "name": "moodle-pruebas",
   "private": true,
-  "description": "Pruebas E2E y de API del proyecto de pruebas sobre Moodle (Cypress). Van aparte de las dependencias de Moodle.",
+  "description": "Pruebas E2E y de API (Cypress) y escenarios Gherkin con Screenplay (Cucumber, Serenity/JS y Playwright) del proyecto de pruebas sobre Moodle. Van aparte de las dependencias de Moodle.",
   "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=22"
@@ -20,12 +20,33 @@
     "api:rf-02": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-02-*.cy.js",
     "api:rf-03": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-03-*.cy.js",
     "api:rf-04": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-04-*.cy.js",
-    "api:rf-05": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-05-*.cy.js"
+    "api:rf-05": "cypress run --config-file cypress.api.config.js --spec cypress/api/rf-05-*.cy.js",
+    "bdd": "cucumber-js bdd/features",
+    "bdd:rf-01": "cucumber-js bdd/features/rf-01-*.feature",
+    "bdd:rf-02": "cucumber-js bdd/features/rf-02-*.feature",
+    "bdd:rf-03": "cucumber-js bdd/features/rf-03-*.feature",
+    "bdd:rf-04": "cucumber-js bdd/features/rf-04-*.feature",
+    "bdd:rf-05": "cucumber-js bdd/features/rf-05-*.feature",
+    "bdd:reporte": "serenity-bdd update && serenity-bdd run --source reportes/bdd/serenity-json --destination reportes/bdd/serenity --features bdd/features"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "13.3.0",
+    "@serenity-js/assertions": "3.49.0",
+    "@serenity-js/console-reporter": "3.49.0",
+    "@serenity-js/core": "3.49.0",
+    "@serenity-js/cucumber": "3.49.0",
+    "@serenity-js/playwright": "3.49.0",
+    "@serenity-js/serenity-bdd": "3.49.0",
+    "@serenity-js/web": "3.49.0",
     "cypress": "16.2.1",
     "cypress-mochawesome-reporter": "5.0.0",
     "cypress-multi-reporters": "2.0.5",
-    "mocha-junit-reporter": "2.2.1"
+    "mocha-junit-reporter": "2.2.1",
+    "playwright": "1.64.1",
+    "tsx": "4.23.15"
+  },
+  "allowScripts": {
+    "cypress@16.2.1": true,
+    "esbuild@0.28.2": true
   }
 }

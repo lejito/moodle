@@ -7,13 +7,15 @@
 //   4. Prueba de humo: la interfaz y la API REST del Moodle desplegado responden.
 //   5. Pruebas E2E: Cypress contra el Moodle desplegado (pruebas/cypress/flujos).
 //   6. Pruebas de API: Cypress contra los servicios web REST del Moodle desplegado (pruebas/cypress/api).
+//   7. Pruebas BDD: escenarios Gherkin con Screenplay (Cucumber, Serenity/JS y Playwright) contra el
+//      Moodle desplegado (pruebas/bdd).
 //
 // Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
 // juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
-// anterior; el análisis y el despliegue solo corren si todas pasaron, y las suites de Cypress, si el
-// despliegue pasó la prueba de humo.
+// anterior; el análisis y el despliegue solo corren si todas pasaron, y las suites contra el Moodle
+// desplegado (E2E, API y BDD), si el despliegue pasó la prueba de humo.
 //
-// OMITIR, en el .env de Jenkins, lista etapas que el pipeline se salta (unitarias, calidad, e2e, api),
+// OMITIR, en el .env de Jenkins, lista etapas que el pipeline se salta (unitarias, calidad, e2e, api, bdd),
 // para probar una nueva sin esperar las demás. Vacío, que es lo normal, corre todo.
 
 def pruebas(String nombre, String carpetas) {
@@ -33,14 +35,15 @@ def omitir(String etapa) {
 }
 
 /**
- * Corre una suite de Cypress en un contenedor que comparte la red del Moodle desplegado: ahí
- * localhost:PUERTO es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso se prepara con
- * preparar.php, por docker exec en ese mismo contenedor. Publica el JUnit y archiva el reporte HTML.
+ * Corre una suite de Node (Cypress o Cucumber) en un contenedor que comparte la red del Moodle
+ * desplegado: ahí localhost:PUERTO es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso se
+ * prepara con preparar.php, por docker exec en ese mismo contenedor. Publica el JUnit de
+ * pruebas/reportes/<suite>/junit y archiva todo el reporte.
  */
-def cypress(String suite, String configuracion) {
+def suiteContraElDespliegue(String suite, String imagen, String dockerfile, String comando) {
   try {
     catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-      sh 'docker build -q -t moodle-pruebas/cypress:16.2.1 -f pruebas/docker/cypress.Dockerfile pruebas/docker'
+      sh "docker build -q -t ${imagen} -f pruebas/docker/${dockerfile} pruebas/docker"
       sh "rm -rf pruebas/reportes/${suite}"
       sh """
         docker run --rm --volumes-from "\$(hostname)" -w "\$WORKSPACE/pruebas" \
@@ -48,7 +51,7 @@ def cypress(String suite, String configuracion) {
           -v /var/run/docker.sock:/var/run/docker.sock \
           -e MOODLE_URL="http://localhost:\$PUERTO" \
           -e PREPARAR="docker exec moodle-despliegue-web-1 php pruebas/seed/preparar.php" \
-          moodle-pruebas/cypress:16.2.1 sh ci/cypress.sh ${configuracion}
+          ${imagen} sh ci/node.sh ${comando}
       """
     }
   } finally {
@@ -189,15 +192,32 @@ pipeline {
       }
     }
 
-    // E2E y API son independientes: la de API corre aunque falle la E2E.
+    // E2E, API y BDD son independientes: cada una corre aunque falle otra.
     stage('Pruebas E2E') {
       when { expression { env.DESPLEGADO == 'si' && !omitir('e2e') } }
-      steps { script { cypress('e2e', 'cypress.config.js') } }
+      steps {
+        script {
+          suiteContraElDespliegue('e2e', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile', 'npx cypress run --config-file cypress.config.js')
+        }
+      }
     }
 
     stage('Pruebas de API') {
       when { expression { env.DESPLEGADO == 'si' && !omitir('api') } }
-      steps { script { cypress('api', 'cypress.api.config.js') } }
+      steps {
+        script {
+          suiteContraElDespliegue('api', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile', 'npx cypress run --config-file cypress.api.config.js')
+        }
+      }
+    }
+
+    stage('Pruebas BDD') {
+      when { expression { env.DESPLEGADO == 'si' && !omitir('bdd') } }
+      steps {
+        script {
+          suiteContraElDespliegue('bdd', 'moodle-pruebas/playwright:1.64.1', 'playwright.Dockerfile', 'npx cucumber-js bdd/features')
+        }
+      }
     }
   }
 
