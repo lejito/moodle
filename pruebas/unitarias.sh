@@ -8,12 +8,14 @@
 # Sin funcionalidades, corre las cinco. Opciones:
 #
 #   --caja-blanca      solo las pruebas de caja blanca (carpetas tests/caja_blanca)
+#   --caja-negra       solo las de caja negra que corren en PHPUnit (tests/caja_negra): los
+#                      límites de tiempo al segundo; el resto de la caja negra es E2E
 #   --cobertura        además mide la cobertura (más lento) y genera su reporte navegable
 #   --filter <texto>   solo las pruebas cuyo nombre contenga el texto, por ejemplo un ID de caso
 #
 # En la terminal, cada prueba sale en una línea con ✔ (pasó), ✘ (falló) o ↩ (omitida),
 # agrupadas por clase, y al final un resumen por componente. Los reportes quedan en
-# pruebas/reportes/unitarias/ (o caja-blanca/), que se borra al empezar cada ejecución:
+# pruebas/reportes/unitarias/ (o caja-blanca/, caja-negra/), que se borra al empezar cada ejecución:
 #
 #   index.html                 resumen de la ejecución, con enlaces a lo demás
 #   <componente>.html          el resultado de cada prueba (TestDox)
@@ -64,7 +66,7 @@ if [ -z "${DENTRO:-}" ]; then
   rfs=()
   for arg in "$@"; do
     case $arg in
-      --caja-blanca | --cobertura | --filter) ;;
+      --caja-blanca | --caja-negra | --cobertura | --filter) ;;
       -*) error "Opción desconocida: $arg" ;;
       *)
         # El texto de --filter no es una funcionalidad.
@@ -93,7 +95,8 @@ filtro=''
 pedidas=()
 while [ $# -gt 0 ]; do
   case $1 in
-    --caja-blanca) caja=si ;;
+    --caja-blanca) caja=blanca ;;
+    --caja-negra) caja=negra ;;
     --cobertura) cobertura=si ;;
     --filter) filtro=${2:-}; shift ;;
     *) n=$(printf '%s' "$1" | tr -cd '0-9'); pedidas+=("$(printf '%02d' "$((10#$n))")") ;;
@@ -102,9 +105,9 @@ while [ $# -gt 0 ]; do
 done
 [ ${#pedidas[@]} -gt 0 ] || pedidas=(01 02 03 04 05)
 
-if [ "$caja" = si ]; then
-  salida=pruebas/reportes/caja-blanca
-  tipo='Pruebas de caja blanca'
+if [ "$caja" != no ]; then
+  salida=pruebas/reportes/caja-$caja
+  tipo="Pruebas de caja $caja"
 else
   salida=pruebas/reportes/unitarias
   tipo='Pruebas unitarias'
@@ -136,10 +139,10 @@ for c in "${lista[@]}"; do
   [ -f "$dir/phpunit.xml" ] ||
     error "Falta $dir/phpunit.xml. Prepara el entorno: guía, sección 6, pasos 6 y 7."
   objetivo=()
-  if [ "$caja" = si ]; then
-    [ -d "$dir/tests/caja_blanca" ] || continue
+  if [ "$caja" != no ]; then
+    [ -d "$dir/tests/caja_$caja" ] || continue
     # Con una carpeta como argumento, PHPUnit busca *Test.php; las de Moodle son *_test.php.
-    objetivo=(--test-suffix _test.php "$dir/tests/caja_blanca")
+    objetivo=(--test-suffix _test.php "$dir/tests/caja_$caja")
   fi
   opciones=(--testdox --colors=always
     --testdox-html "$salida/$nombre.html" --log-junit "$salida/$nombre.xml")
