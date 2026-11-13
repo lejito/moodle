@@ -30,8 +30,9 @@ def todoBien() {
 
 /** Si la etapa está en OMITIR. Las pruebas unitarias se llevan con ellas el análisis, que usa su cobertura. */
 def omitir(String etapa) {
-  def omitidas = (env.OMITIR ?: '').split(',')*.trim()
-  return etapa in omitidas || (etapa == 'calidad' && 'unitarias' in omitidas)
+  // Sin operador de propagación (*.): la transformación CPS de Jenkins no lo admite.
+  def omitidas = ',' + (env.OMITIR ?: '').replace(' ', '') + ','
+  return omitidas.contains(",${etapa},") || (etapa == 'calidad' && omitidas.contains(',unitarias,'))
 }
 
 /**
