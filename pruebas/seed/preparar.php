@@ -71,6 +71,8 @@ $datos = match ((int) $partes[1]) {
     1 => preparar_rf01($caso, $curso, $usuarios),
     2 => preparar_rf02($caso, $curso, $usuarios),
     3 => preparar_rf03($caso, $curso, $usuarios),
+    4 => preparar_rf04($caso, $curso, $usuarios),
+    5 => preparar_rf05($caso, $curso, $usuarios),
     default => cli_error("Todavía no hay preparación para los casos de RF-MOOD-0{$partes[1]}."),
 };
 
@@ -346,6 +348,221 @@ function preparar_rf03(string $caso, stdClass $curso, array $usuarios): array {
         'estudiante' => (int) $estudiante->id,
         'apoyo' => $apoyo ? (int) $apoyo->id : null,
     ];
+}
+
+/**
+ * RF-MOOD-04, presentar un cuestionario.
+ *
+ * Restablece el «Cuestionario de laboratorio» como lo sembró sembrar.php (abrió ayer, cierra en 7
+ * días, 2 intentos, sin contraseña ni tiempo límite) y sin intentos de nadie, ni vistas previas.
+ *
+ * @param string $caso
+ * @param stdClass $curso
+ * @param stdClass[] $usuarios
+ * @return array
+ */
+function preparar_rf04(string $caso, stdClass $curso, array $usuarios): array {
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/mod/quiz/lib.php');
+    require_once($CFG->dirroot . '/mod/quiz/locallib.php');
+    require_once($CFG->libdir . '/testing/generator/lib.php');
+    $ahora = time();
+    $quiz = $DB->get_record('quiz', ['course' => $curso->id, 'name' => CUESTIONARIO], '*', MUST_EXIST);
+
+    $ajustes = [
+        'timeopen' => $ahora - DAYSECS,
+        'timeclose' => $ahora + 7 * DAYSECS,
+        'attempts' => 2,
+        'timelimit' => 0,
+        'overduehandling' => 'autosubmit',
+    ];
+    $contrasena = '';
+    switch ($caso) {
+        case 'MOOD-CP-407':
+            $ajustes['timeopen'] = $ahora + DAYSECS;
+            break;
+        case 'MOOD-CP-408':
+            $ajustes['timeopen'] = $ahora - 7 * DAYSECS;
+            $ajustes['timeclose'] = $ahora - DAYSECS;
+            break;
+        case 'MOOD-CP-411':
+        case 'MOOD-CP-412':
+            $contrasena = 'Quiz-2026';
+            break;
+        case 'MOOD-CP-414':
+            $ajustes['timelimit'] = MINSECS;
+            break;
+    }
+    $ajustes['password'] = $contrasena;
+    $DB->update_record('quiz', (object) (['id' => $quiz->id] + $ajustes));
+    rebuild_course_cache($curso->id, true);
+    quiz_delete_all_attempts($DB->get_record('quiz', ['id' => $quiz->id]));
+
+    if ($caso === 'MOOD-CP-410') {
+        // Los dos intentos permitidos, ya terminados.
+        $generador = (new testing_data_generator())->get_plugin_generator('mod_quiz');
+        $estudiante = $usuarios['estudiante.a'];
+        \core\session\manager::set_user($estudiante);
+        for ($i = 0; $i < 2; $i++) {
+            $intento = $generador->create_attempt($quiz->id, $estudiante->id);
+            \mod_quiz\quiz_attempt::create($intento->id)->process_submit(time(), false);
+            \mod_quiz\quiz_attempt::create($intento->id)->process_grade_submission(time());
+        }
+        \core\session\manager::set_user(get_admin());
+    }
+
+    $cm = get_coursemodule_from_instance('quiz', $quiz->id, $curso->id, false, MUST_EXIST);
+    return [
+        'cuestionario' => (int) $cm->id,
+        'contrasenaCuestionario' => 'Quiz-2026',
+    ];
+}
+
+/**
+ * RF-MOOD-05, participar en un foro.
+ *
+ * Restablece el «Foro de laboratorio» como lo sembró sembrar.php: general, sin fechas, sin grupos
+ * ni bloqueo por inactividad, con solo el «Debate inicial» del docente (sin respuestas, sin
+ * bloquear) y sin cambios de permisos. También vacía el foro de avisos y borra los grupos.
+ *
+ * @param string $caso
+ * @param stdClass $curso
+ * @param stdClass[] $usuarios
+ * @return array
+ */
+function preparar_rf05(string $caso, stdClass $curso, array $usuarios): array {
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/mod/forum/lib.php');
+    require_once($CFG->libdir . '/testing/generator/lib.php');
+    $generador = (new testing_data_generator())->get_plugin_generator('mod_forum');
+    $ahora = time();
+    $docente = $usuarios['docente'];
+    $estudiante = $usuarios['estudiante.a'];
+    $rolestudiante = $DB->get_field('role', 'id', ['shortname' => 'student']);
+
+    $foro = $DB->get_record('forum', ['course' => $curso->id, 'name' => FORO], '*', MUST_EXIST);
+    $cm = get_coursemodule_from_instance('forum', $foro->id, $curso->id, false, MUST_EXIST);
+    $contexto = context_module::instance($cm->id);
+
+    // El foro y su debate, como los sembró sembrar.php.
+    $DB->update_record('forum', (object) [
+        'id' => $foro->id,
+        'duedate' => 0,
+        'cutoffdate' => 0,
+        'lockdiscussionafter' => 0,
+    ]);
+    \core_courseformat\formatactions::cm($curso)->set_groupmode($cm->id, NOGROUPS);
+    unassign_capability('mod/forum:replypost', $rolestudiante, $contexto->id);
+    borrar_usuarios_de_apoyo();
+    foreach ([GRUPO_A, 'Grupo B'] as $nombre) {
+        if ($grupo = groups_get_group_by_name($curso->id, $nombre)) {
+            groups_delete_group($grupo);
+        }
+    }
+    $foro = $DB->get_record('forum', ['id' => $foro->id]);
+    foreach ($DB->get_records('forum_discussions', ['forum' => $foro->id]) as $debate) {
+        if ($debate->name === DEBATE) {
+            $inicial = $debate;
+            continue;
+        }
+        forum_delete_discussion($debate, true, $curso, $cm, $foro);
+    }
+    foreach ($DB->get_records('forum_posts', ['discussion' => $inicial->id]) as $post) {
+        if ($post->id != $inicial->firstpost && $DB->record_exists('forum_posts', ['id' => $post->id])) {
+            forum_delete_post($post, true, $curso, $cm, $foro, true);
+        }
+    }
+    $DB->update_record('forum_discussions', (object) [
+        'id' => $inicial->id,
+        'timelocked' => 0,
+        'timemodified' => $ahora,
+    ]);
+    $avisos = forum_get_course_forum($curso->id, 'news');
+    $cmavisos = get_coursemodule_from_instance('forum', $avisos->id, $curso->id, false, MUST_EXIST);
+    foreach ($DB->get_records('forum_discussions', ['forum' => $avisos->id]) as $debate) {
+        forum_delete_discussion($debate, true, $curso, $cmavisos, $avisos);
+    }
+
+    $datos = [
+        'foro' => (int) $cm->id,
+        'debate' => (int) $inicial->id,
+        'nombreDebate' => DEBATE,
+    ];
+    $grupo = function (string $nombre, array $miembros) use ($curso): int {
+        $id = groups_create_group((object) ['courseid' => $curso->id, 'name' => $nombre]);
+        foreach ($miembros as $miembro) {
+            groups_add_member($id, $miembro);
+        }
+        return $id;
+    };
+    switch ($caso) {
+        case 'MOOD-CP-506':
+            $aviso = $generador->create_discussion([
+                'course' => $curso->id,
+                'forum' => $avisos->id,
+                'userid' => $docente->id,
+                'name' => 'Aviso del laboratorio',
+                'message' => 'Mañana no hay clase.',
+            ]);
+            $datos['aviso'] = (int) $aviso->id;
+            break;
+        case 'MOOD-CP-507':
+            $DB->update_record('forum', (object) [
+                'id' => $foro->id,
+                'duedate' => $ahora - DAYSECS,
+                'cutoffdate' => $ahora + 7 * DAYSECS,
+            ]);
+            break;
+        case 'MOOD-CP-508':
+            $DB->set_field('forum', 'cutoffdate', $ahora - DAYSECS, ['id' => $foro->id]);
+            break;
+        case 'MOOD-CP-509':
+            $DB->set_field('forum_discussions', 'timelocked', $ahora, ['id' => $inicial->id]);
+            break;
+        case 'MOOD-CP-510':
+            $DB->set_field('forum', 'lockdiscussionafter', DAYSECS, ['id' => $foro->id]);
+            $DB->set_field('forum_discussions', 'timemodified', $ahora - 2 * DAYSECS, ['id' => $inicial->id]);
+            break;
+        case 'MOOD-CP-511':
+        case 'MOOD-CP-512':
+            \core_courseformat\formatactions::cm($curso)->set_groupmode($cm->id, SEPARATEGROUPS);
+            $grupoa = $grupo(GRUPO_A, [$estudiante->id]);
+            $grupob = $grupo('Grupo B', []);
+            $debate = $generador->create_discussion([
+                'course' => $curso->id,
+                'forum' => $foro->id,
+                'userid' => $docente->id,
+                'groupid' => $caso === 'MOOD-CP-511' ? $grupob : $grupoa,
+                'name' => 'Debate de grupo',
+                'message' => 'Debate solo para un grupo.',
+            ]);
+            $datos['debateGrupo'] = (int) $debate->id;
+            break;
+        case 'MOOD-CP-513':
+            assign_capability('mod/forum:replypost', CAP_PREVENT, $rolestudiante, $contexto->id, true);
+            break;
+        case 'MOOD-CP-514':
+            $apoyo = crear_usuario_de_apoyo(1);
+            enrol_try_internal_enrol($curso->id, $apoyo->id, $rolestudiante);
+            $respuesta = $generador->create_post([
+                'discussion' => $inicial->id,
+                'parent' => $inicial->firstpost,
+                'userid' => $estudiante->id,
+                'subject' => 'Re: ' . DEBATE,
+                'message' => 'Mi respuesta al debate.',
+            ]);
+            $generador->create_post([
+                'discussion' => $inicial->id,
+                'parent' => $respuesta->id,
+                'userid' => $docente->id,
+                'subject' => 'Re: ' . DEBATE,
+                'message' => 'Respuesta privada del docente.',
+                'privatereplyto' => $estudiante->id,
+            ]);
+            break;
+    }
+    rebuild_course_cache($curso->id, true);
+    return $datos;
 }
 
 /**

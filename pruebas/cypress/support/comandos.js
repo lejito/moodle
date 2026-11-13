@@ -11,9 +11,12 @@ Cypress.Commands.add('preparar', (caso) => cy.task('preparar', caso, { timeout: 
  * escribir en la página: el formulario cambia sus campos mientras carga su JavaScript y a veces
  * la contraseña quedaba a medias. Entrar no es parte de ninguna funcionalidad bajo prueba. La
  * sesión de cada usuario se reutiliza entre pruebas (cy.session) y se valida antes de usarla.
+ *
+ * `sesion` da otro nombre a la sesión, para empezar una nueva: Moodle recuerda cosas en la sesión
+ * (por ejemplo, que ya se escribió la contraseña de un cuestionario) que un caso no debe heredar.
  */
-Cypress.Commands.add('iniciarSesion', (usuario, contrasena) => {
-  cy.session(usuario, () => {
+Cypress.Commands.add('iniciarSesion', (usuario, contrasena, { sesion = usuario } = {}) => {
+  cy.session(sesion, () => {
     cy.request('/login/index.php').its('body').then((html) => {
       const token = html.match(/name="logintoken" value="([^"]+)"/)[1];
       cy.request({
