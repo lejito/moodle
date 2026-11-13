@@ -5,6 +5,7 @@
 //   3. Despliegue: una imagen de Moodle con este código, instalada y sembrada desde cero, en
 //      http://localhost:8000 (o el puerto de PUERTO en .env).
 //   4. Prueba de humo: la interfaz y la API REST del Moodle desplegado responden.
+//   5. Pruebas E2E: Cypress contra el Moodle desplegado (pruebas/cypress).
 //
 // Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
 // juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
@@ -145,6 +146,33 @@ pipeline {
           HUMO_CONECTAR="localhost:$PUERTO:host.docker.internal:$PUERTO" \
             bash pruebas/ci/humo.sh "http://localhost:$PUERTO" pruebas/reportes/servicios-web.json
         '''
+      }
+    }
+
+    // Cypress corre en un contenedor que comparte la red del Moodle desplegado: ahí localhost:PUERTO
+    // es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso se prepara con preparar.php,
+    // por docker exec en ese mismo contenedor.
+    stage('Pruebas E2E') {
+      when { expression { todoBien() } }
+      steps {
+        sh '''
+          docker build -t moodle-pruebas/cypress:16.2.1 -f pruebas/docker/cypress.Dockerfile pruebas/docker
+          rm -rf pruebas/reportes/e2e
+          docker run --rm --volumes-from "$(hostname)" -w "$WORKSPACE/pruebas" \
+            --network container:moodle-despliegue-web-1 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e MOODLE_URL="http://localhost:$PUERTO" \
+            -e PREPARAR="docker exec moodle-despliegue-web-1 php pruebas/seed/preparar.php" \
+            moodle-pruebas/cypress:16.2.1 \
+            sh -c 'npm ci --no-audit --no-fund && npx cypress run'
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'pruebas/reportes/e2e/junit/*.xml'
+          archiveArtifacts allowEmptyArchive: true, artifacts: 'pruebas/reportes/e2e/**'
+          sh 'docker run --rm --volumes-from "$(hostname)" alpine:3.22 chown -R "$(id -u):$(id -g)" "$WORKSPACE/pruebas"'
+        }
       }
     }
   }

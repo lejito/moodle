@@ -53,6 +53,9 @@ $CFG->phpunit_dataroot = '/var/moodledata/phpunit';
 // Igual que la plantilla del pipeline (.github/workflows/config-template.php).
 $CFG->debug = E_ALL;
 $CFG->debugdisplay = 1;
+// Sitio de laboratorio sin servidor de correo: Moodle no intenta enviar correos (bienvenida al
+// matricularse, avisos del foro), que fallarían y llenarían las páginas y la salida de errores.
+$CFG->noemailever = true;
 $CFG->routerconfigured = true;
 
 require_once(__DIR__ . '/lib/setup.php');

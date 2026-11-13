@@ -41,25 +41,18 @@ require_once($CFG->libdir . '/clilib.php');
 require_once($CFG->libdir . '/testing/generator/lib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 
-// Los mismos valores los usan las suites de pruebas/: si cambian aquí, cambian allá.
-const CURSO_CORTO = 'LAB-PRUEBAS';
-const CURSO_NOMBRE = 'Laboratorio de pruebas de software';
-const CLAVE_MATRICULA = 'Clave-2026';
-const CONTRASENA = 'Pruebas-2026';
-const USUARIOS = [
-    // Matriculado como estudiante: entrega, presenta el cuestionario y participa en el foro.
-    'estudiante.a' => ['firstname' => 'Ana', 'lastname' => 'Estudiante', 'rol' => 'student'],
-    // Sin matricular: es quien se automatricula con la clave (RF-MOOD-01).
-    'estudiante.b' => ['firstname' => 'Bruno', 'lastname' => 'Estudiante', 'rol' => null],
-    // Califica las entregas y abre el debate del foro.
-    'docente' => ['firstname' => 'Diana', 'lastname' => 'Docente', 'rol' => 'editingteacher'],
-];
+require_once(__DIR__ . '/datos.php');
 
 $admin = get_admin();
 \core\session\manager::set_user($admin);
 $generator = new testing_data_generator();
 $ahora = time();
 $dia = DAYSECS;
+
+// 0. Sin recorridos guiados: los de Moodle ("Find your way around") se abren sobre el curso y el
+// tablero la primera vez que entra cada usuario, y tapan lo que las pruebas E2E tienen que pulsar.
+$DB->set_field('tool_usertours_tours', 'enabled', 0);
+\tool_usertours\cache::notify_tour_change();
 
 // 1. Curso: se recrea desde cero para que cada corrida parta del mismo estado.
 // La papelera de reciclaje respaldaría el curso borrado en cada siembra; en
@@ -87,6 +80,7 @@ $DB->update_record('enrol', (object) [
     'id' => $instancia->id,
     'status' => ENROL_INSTANCE_ENABLED,
     'password' => CLAVE_MATRICULA,
+    'customint4' => 0, // Sin mensaje de bienvenida: el sitio de laboratorio no envía correos.
     'customint6' => 1, // Permite matrículas nuevas.
 ]);
 

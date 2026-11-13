@@ -1,2 +1,5 @@
 # Reportes que generan las pruebas en local (cobertura, resultados).
 reportes/
+
+# Dependencias de JavaScript de las pruebas E2E (npm ci).
+node_modules/

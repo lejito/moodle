@@ -1,0 +1,24 @@
+{
+  "name": "moodle-pruebas",
+  "private": true,
+  "description": "Pruebas E2E del proyecto de pruebas sobre Moodle (Cypress). Van aparte de las dependencias de Moodle.",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "e2e": "cypress run",
+    "e2e:abrir": "cypress open --e2e --browser electron",
+    "e2e:rf-01": "cypress run --spec cypress/flujos/rf-01-*.cy.js",
+    "e2e:rf-02": "cypress run --spec cypress/flujos/rf-02-*.cy.js",
+    "e2e:rf-03": "cypress run --spec cypress/flujos/rf-03-*.cy.js",
+    "e2e:rf-04": "cypress run --spec cypress/flujos/rf-04-*.cy.js",
+    "e2e:rf-05": "cypress run --spec cypress/flujos/rf-05-*.cy.js"
+  },
+  "devDependencies": {
+    "cypress": "16.2.1",
+    "cypress-mochawesome-reporter": "5.0.0",
+    "cypress-multi-reporters": "2.0.5",
+    "mocha-junit-reporter": "2.2.1"
+  }
+}

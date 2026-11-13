@@ -50,7 +50,13 @@ services:
 
   web:
     <<: *moodle
-    command: ['apache2-foreground']
+    # Apache escucha también en el puerto del wwwroot (el final de MOODLE_URL). Las pruebas E2E de
+    # Jenkins comparten la red de este contenedor y abren Moodle en localhost:PUERTO, la dirección
+    # que Moodle exige.
+    command:
+      - sh
+      - -c
+      - 'p=$${MOODLE_URL##*:}; [ "$$p" = 80 ] || echo "Listen $$p" >> /etc/apache2/ports.conf; exec apache2-foreground'
     ports:
       - '${PUERTO:-8000}:80'
     restart: unless-stopped
