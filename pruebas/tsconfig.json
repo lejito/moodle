@@ -8,6 +8,7 @@
   "include": [
     "cypress/**/*.js",
     "cypress.config.js",
-    "cypress.api.config.js"
+    "cypress.api.config.js",
+    "cypress.accesibilidad.config.js"
   ]
 }

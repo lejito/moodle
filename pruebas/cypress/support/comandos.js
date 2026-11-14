@@ -89,3 +89,39 @@ Cypress.Commands.add('servicioWeb', (token, funcion, parametros = {}) => {
     return respuesta.body;
   });
 });
+
+/** Las etiquetas de axe-core que se revisan: WCAG 2.0, 2.1 y 2.2, niveles A y AA. */
+const ETIQUETAS_WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/**
+ * Revisa la página actual con axe-core y registra lo que encontró (tarea registrarAccesibilidad, que
+ * arma reportes/accesibilidad/barreras.html). Entrega las violaciones: { regla, impacto, ... }.
+ */
+Cypress.Commands.add('revisarAccesibilidad', (caso, pantalla) => {
+  cy.esperarMoodle();
+  return cy.readFile('node_modules/axe-core/axe.min.js', { log: false }).then((fuente) =>
+    cy.window({ log: false }).then({ timeout: 60000 }, (ventana) => {
+      if (!ventana.axe) {
+        ventana.eval(fuente);
+      }
+      return ventana.axe.run(ventana.document, {
+        runOnly: { type: 'tag', values: ETIQUETAS_WCAG },
+        resultTypes: ['violations'],
+      }).then((resultado) => ({ ruta: ventana.location.pathname, resultado }));
+    })).then(({ ruta, resultado }) => {
+    const violaciones = resultado.violations.map((v) => ({
+      regla: v.id,
+      impacto: v.impact,
+      descripcion: v.help,
+      ayuda: v.helpUrl,
+      etiquetas: v.tags,
+      elementos: v.nodes.map((n) => ({ selector: n.target.join(' '), html: n.html.slice(0, 300) })),
+    }));
+    Cypress.log({
+      name: 'accesibilidad',
+      message: `${pantalla}: ${violaciones.length ? violaciones.map((v) => `${v.regla} (${v.impacto})`).join(', ') : 'sin violaciones'}`,
+    });
+    cy.task('registrarAccesibilidad', { caso, pantalla, url: ruta, violaciones }, { log: false });
+    return cy.wrap(violaciones, { log: false });
+  });
+});

@@ -3,11 +3,20 @@ import { Then, When } from '@cucumber/cucumber';
 import { actorInTheSpotlight, type Actor } from '@serenity-js/core';
 import { Ensure, equals } from '@serenity-js/assertions';
 import { Text } from '@serenity-js/web';
-import { AbrirElDebateInicial, BotonesResponder, MensajesDelDebate, ResponderAlDebate } from '../screenplay/foro';
+import {
+  AbrirElDebateInicial,
+  BotonesResponder,
+  MensajesDelDebate,
+  ResponderAlDebate,
+  ResponderConElTeclado,
+} from '../screenplay/foro';
 
 When('{pronombre} abre el debate inicial', (actor: Actor) => actor.attemptsTo(AbrirElDebateInicial()));
 
 When('{pronombre} responde {string}', (actor: Actor, texto: string) => actor.attemptsTo(ResponderAlDebate(texto)));
+
+When('{pronombre} responde {string} usando solo el teclado', (actor: Actor, texto: string) =>
+  actor.attemptsTo(ResponderConElTeclado(texto)));
 
 // La respuesta aparece como un mensaje más del debate, con su texto.
 Then('el debate muestra su respuesta {string}', (texto: string) =>

@@ -9,14 +9,15 @@
 //   6. Pruebas de API: Cypress contra los servicios web REST del Moodle desplegado (pruebas/cypress/api).
 //   7. Pruebas BDD: escenarios Gherkin con Screenplay (Cucumber, Serenity/JS y Playwright) contra el
 //      Moodle desplegado (pruebas/bdd).
+//   8. Pruebas de accesibilidad: axe-core, teclado y reflujo con Cypress (pruebas/cypress/accesibilidad).
 //
 // Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
 // juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
 // anterior; el análisis y el despliegue solo corren si todas pasaron, y las suites contra el Moodle
-// desplegado (E2E, API y BDD), si el despliegue pasó la prueba de humo.
+// desplegado (E2E, API, BDD y accesibilidad), si el despliegue pasó la prueba de humo.
 //
-// OMITIR, en el .env de Jenkins, lista etapas que el pipeline se salta (unitarias, calidad, e2e, api, bdd),
-// para probar una nueva sin esperar las demás. Vacío, que es lo normal, corre todo.
+// OMITIR, en el .env de Jenkins, lista etapas que el pipeline se salta (unitarias, calidad, e2e, api,
+// bdd, accesibilidad), para probar una nueva sin esperar las demás. Vacío, que es lo normal, corre todo.
 
 def pruebas(String nombre, String carpetas) {
   catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
@@ -193,7 +194,7 @@ pipeline {
       }
     }
 
-    // E2E, API y BDD son independientes: cada una corre aunque falle otra.
+    // Las suites contra el despliegue son independientes: cada una corre aunque falle otra.
     stage('Pruebas E2E') {
       when { expression { env.DESPLEGADO == 'si' && !omitir('e2e') } }
       steps {
@@ -217,6 +218,16 @@ pipeline {
       steps {
         script {
           suiteContraElDespliegue('bdd', 'moodle-pruebas/playwright:1.64.1', 'playwright.Dockerfile', 'npx cucumber-js bdd/features')
+        }
+      }
+    }
+
+    stage('Pruebas de accesibilidad') {
+      when { expression { env.DESPLEGADO == 'si' && !omitir('accesibilidad') } }
+      steps {
+        script {
+          suiteContraElDespliegue('accesibilidad', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile',
+            'npx cypress run --config-file cypress.accesibilidad.config.js')
         }
       }
     }

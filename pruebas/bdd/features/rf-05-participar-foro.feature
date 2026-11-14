@@ -18,6 +18,13 @@ Característica: RF-MOOD-05 · Participar en un foro
       Cuando ella responde "Espero aprender a diseñar pruebas"
       Entonces el debate muestra su respuesta "Espero aprender a diseñar pruebas"
 
+    @accesibilidad
+    Escenario: MOOD-CP-576 - Responde al debate usando solo el teclado
+      Dado que Ana inició sesión
+      Cuando ella abre el debate inicial
+      Y ella responde "Respuesta con el teclado" usando solo el teclado
+      Entonces el debate muestra su respuesta "Respuesta con el teclado"
+
     Escenario: MOOD-CP-508 - Después de la fecha de corte no se puede responder
       Dado que Ana inició sesión
       Cuando ella abre el debate inicial

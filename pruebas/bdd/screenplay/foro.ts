@@ -3,6 +3,7 @@ import { Task, Wait } from '@serenity-js/core';
 import { isVisible } from '@serenity-js/web';
 import { By, Click, Enter, PageElement, PageElements } from '@serenity-js/web';
 import { Abrir, DireccionDelCaso, EsperarAMoodle } from './moodle';
+import { EscribirConElTeclado, LlevarElFocoCon, PulsarLaTecla } from './teclado';
 
 const FormularioDeRespuesta = '//form[@data-content="inpage-reply-form"]';
 const TextoDeLaRespuesta = PageElement.located(By.xpath(`${FormularioDeRespuesta}//textarea`)).describedAs('el texto de la respuesta');
@@ -25,6 +26,27 @@ export const ResponderAlDebate = (texto: string) =>
     Wait.until(TextoDeLaRespuesta, isVisible()),
     Enter.theValue(texto).into(TextoDeLaRespuesta),
     Click.on(PublicarRespuesta),
+    EsperarAMoodle(),
+  );
+
+/**
+ * Responde al mensaje de la docente usando solo el teclado. Las acciones de cada mensaje son un
+ * menubar (role="menubar"): Tab llega a la primera («Permalink») y las flechas recorren las demás.
+ */
+export const ResponderConElTeclado = (texto: string) =>
+  Task.where(`#actor responde «${texto}» usando solo el teclado`,
+    LlevarElFocoCon('Tab', { descripcion: 'las acciones del mensaje', selector: '[data-region="post"] [role="menuitem"]' }),
+    LlevarElFocoCon('ArrowRight', { descripcion: 'el botón «Reply»', selector: '[role="menuitem"]', texto: 'Reply' }, 10),
+    PulsarLaTecla('Enter'),
+    Wait.until(TextoDeLaRespuesta, isVisible()),
+    LlevarElFocoCon('Tab', { descripcion: 'el texto de la respuesta', selector: 'form[data-content="inpage-reply-form"] textarea' }, 10),
+    EscribirConElTeclado(texto),
+    LlevarElFocoCon('Tab', {
+      descripcion: 'el botón «Post to forum»',
+      selector: 'form[data-content="inpage-reply-form"] button',
+      texto: 'Post to forum',
+    }, 10),
+    PulsarLaTecla('Enter'),
     EsperarAMoodle(),
   );
 
