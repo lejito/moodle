@@ -354,23 +354,27 @@ class forum_portfolio_caller extends portfolio_module_caller_base {
         return $output;
     }
     /**
+     * Calculate the fingerprint the portfolio API uses to detect changes in the exported post or discussion.
+     *
+     * It is the SHA-256 of the files and of the subject and message of each post. The name is kept from the
+     * portfolio API.
+     *
      * @return string
      */
     function get_sha1() {
-        $filesha = '';
+        $filesfingerprint = '';
         try {
-            $filesha = $this->get_sha1_file();
+            $filesfingerprint = $this->get_sha1_file();
         } catch (portfolio_caller_exception $e) { } // no files
 
         if ($this->post) {
-            return hash('sha256', $filesha . ',' . $this->post->subject . ',' . $this->post->message);
-        } else {
-            $sha1s = array($filesha);
-            foreach ($this->posts as $post) {
-                $sha1s[] = hash('sha256', $post->subject . ',' . $post->message);
-            }
-            return hash('sha256', implode(',', $sha1s));
+            return hash('sha256', $filesfingerprint . ',' . $this->post->subject . ',' . $this->post->message);
         }
+        $fingerprints = [$filesfingerprint];
+        foreach ($this->posts as $post) {
+            $fingerprints[] = hash('sha256', $post->subject . ',' . $post->message);
+        }
+        return hash('sha256', implode(',', $fingerprints));
     }
 
     function expected_time() {

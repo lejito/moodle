@@ -11931,8 +11931,10 @@ class assign_portfolio_caller extends portfolio_module_caller_base {
     }
 
     /**
-     * Calculate a sha1 has of either a single file or a list
-     * of files based on the data set by load_data.
+     * Calculate the fingerprint the portfolio API uses to detect changes in the exported content.
+     *
+     * For an online text it is the SHA-256 of the formatted text and of its files; otherwise it is the
+     * fingerprint of the file or files set by load_data. The name is kept from the portfolio API.
      *
      * @return string
      */
@@ -11946,14 +11948,13 @@ class assign_portfolio_caller extends portfolio_module_caller_base {
             $text = format_text($plugin->get_editor_text($this->editor, $this->sid),
                                 $plugin->get_editor_format($this->editor, $this->sid),
                                 $options);
-            $textsha1 = hash('sha256', $text);
-            $filesha1 = '';
+            $filesfingerprint = '';
             try {
-                $filesha1 = $this->get_sha1_file();
+                $filesfingerprint = $this->get_sha1_file();
             } catch (portfolio_caller_exception $e) {
                 // No files.
             }
-            return hash('sha256', $textsha1 . $filesha1);
+            return hash('sha256', hash('sha256', $text) . $filesfingerprint);
         }
         return $this->get_sha1_file();
     }
