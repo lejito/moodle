@@ -20,5 +20,8 @@ RUN install-php-extensions gd intl zip pgsql pcov exif soap opcache \
 
 COPY php.ini /usr/local/etc/php/conf.d/zz-moodle.ini
 COPY apache.conf /etc/apache2/sites-available/000-default.conf
+# Cabeceras de seguridad (hallazgos SEC-01, 03, 04 y 05 de ZAP); necesitan mod_headers.
+COPY seguridad.conf /etc/apache2/conf-available/seguridad.conf
+RUN a2enmod headers && a2enconf seguridad
 
 WORKDIR /var/www/moodle
