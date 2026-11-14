@@ -855,16 +855,7 @@ class mod_forum_external extends external_api {
             throw new moodle_exception('nopostforum', 'forum');
         }
 
-        // The reply form requires a message and a subject of up to 255 characters, and so does the API.
-        if (html_is_blank($params['message'])) {
-            throw new moodle_exception('erroremptymessage', 'forum');
-        }
-        if (trim($params['subject']) === '') {
-            throw new moodle_exception('erroremptysubject', 'forum');
-        }
-        if (\core_text::strlen($params['subject']) > 255) {
-            throw new \invalid_parameter_exception(get_string('maximumchars', '', 255));
-        }
+        self::validate_post_content($params['subject'], $params['message']);
 
         $thresholdwarning = forum_check_throttling($forumrecord, $cm);
         forum_check_blocking_threshold($thresholdwarning);
@@ -951,6 +942,28 @@ class mod_forum_external extends external_api {
         $result['post'] = $exportedpost;
         $result['messages'] = $message;
         return $result;
+    }
+
+    /**
+     * Validates the subject and message of a new post with the same rules as the reply form.
+     *
+     * The form requires both and limits the subject to 255 characters, the size of the database column.
+     *
+     * @param string $subject The subject of the post.
+     * @param string $message The message of the post, in any format.
+     * @throws moodle_exception If the message or the subject is empty.
+     * @throws \invalid_parameter_exception If the subject is longer than 255 characters.
+     */
+    protected static function validate_post_content(string $subject, string $message): void {
+        if (html_is_blank($message)) {
+            throw new moodle_exception('erroremptymessage', 'forum');
+        }
+        if (trim($subject) === '') {
+            throw new moodle_exception('erroremptysubject', 'forum');
+        }
+        if (\core_text::strlen($subject) > 255) {
+            throw new \invalid_parameter_exception(get_string('maximumchars', '', 255));
+        }
     }
 
     /**
