@@ -363,13 +363,13 @@ class forum_portfolio_caller extends portfolio_module_caller_base {
         } catch (portfolio_caller_exception $e) { } // no files
 
         if ($this->post) {
-            return sha1($filesha . ',' . $this->post->subject . ',' . $this->post->message);
+            return hash('sha256', $filesha . ',' . $this->post->subject . ',' . $this->post->message);
         } else {
             $sha1s = array($filesha);
             foreach ($this->posts as $post) {
-                $sha1s[] = sha1($post->subject . ',' . $post->message);
+                $sha1s[] = hash('sha256', $post->subject . ',' . $post->message);
             }
-            return sha1(implode(',', $sha1s));
+            return hash('sha256', implode(',', $sha1s));
         }
     }
 

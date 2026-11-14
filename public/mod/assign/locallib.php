@@ -11946,14 +11946,14 @@ class assign_portfolio_caller extends portfolio_module_caller_base {
             $text = format_text($plugin->get_editor_text($this->editor, $this->sid),
                                 $plugin->get_editor_format($this->editor, $this->sid),
                                 $options);
-            $textsha1 = sha1($text);
+            $textsha1 = hash('sha256', $text);
             $filesha1 = '';
             try {
                 $filesha1 = $this->get_sha1_file();
             } catch (portfolio_caller_exception $e) {
                 // No files.
             }
-            return sha1($textsha1 . $filesha1);
+            return hash('sha256', $textsha1 . $filesha1);
         }
         return $this->get_sha1_file();
     }
