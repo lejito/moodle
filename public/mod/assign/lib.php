@@ -1414,12 +1414,12 @@ function assign_pluginfile($course,
         return false;
     }
 
-    $relativepath = implode('/', $args);
-
-    $fullpath = "/{$context->id}/mod_assign/$filearea/$itemid/$relativepath";
+    $filename = (string) array_pop($args);
+    $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
 
     $fs = get_file_storage();
-    if (!$file = $fs->get_file_by_hash(sha1($fullpath)) or $file->is_directory()) {
+    if (!$file = $fs->get_file($context->id, 'mod_assign', $filearea, $itemid, $filepath, $filename)
+            or $file->is_directory()) {
         return false;
     }
     send_stored_file($file, 0, 0, $forcedownload, $options);

@@ -2817,9 +2817,10 @@ function forum_pluginfile($course, $cm, $context, $filearea, $args, $forcedownlo
     }
 
     $fs = get_file_storage();
-    $relativepath = implode('/', $args);
-    $fullpath = "/$context->id/mod_forum/$filearea/$postid/$relativepath";
-    if (!$file = $fs->get_file_by_hash(sha1($fullpath)) or $file->is_directory()) {
+    $filename = (string) array_pop($args);
+    $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
+    if (!$file = $fs->get_file($context->id, 'mod_forum', $filearea, $postid, $filepath, $filename)
+            or $file->is_directory()) {
         return false;
     }
 
