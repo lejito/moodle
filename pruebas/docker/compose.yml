@@ -58,10 +58,15 @@ services:
     <<: *moodle
     command: ['php', '--version']
 
-  # Moodle en el navegador, en la URL de $CFG->wwwroot (config.php).
+  # Moodle en el navegador, en la URL de $CFG->wwwroot (config.php). Apache escucha también en el
+  # puerto 8000 dentro del contenedor: las herramientas que comparten su red (ZAP, en
+  # pruebas/seguridad/auditar.sh) abren Moodle en localhost:8000, la dirección que Moodle exige.
   web:
     <<: *moodle
-    command: ['apache2-foreground']
+    command:
+      - sh
+      - -c
+      - 'grep -q "^Listen 8000" /etc/apache2/ports.conf || echo "Listen 8000" >> /etc/apache2/ports.conf; exec apache2-foreground'
     ports:
       - '8000:80'
     # docker compose watch copia al volumen codigo cada archivo que cambia, y

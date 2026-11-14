@@ -10,14 +10,18 @@
 //   7. Pruebas BDD: escenarios Gherkin con Screenplay (Cucumber, Serenity/JS y Playwright) contra el
 //      Moodle desplegado (pruebas/bdd).
 //   8. Pruebas de accesibilidad: axe-core, teclado y reflujo con Cypress (pruebas/cypress/accesibilidad).
+//   9. Pruebas de seguridad: el OWASP Top 10 sobre las funcionalidades, con Cypress (pruebas/cypress/seguridad).
+//  10. Auditoría de seguridad: composer audit, npm audit y ZAP baseline (pruebas/seguridad/auditar.sh).
+//      Informa los avisos, no hace fallar el build.
 //
 // Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
 // juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
 // anterior; el análisis y el despliegue solo corren si todas pasaron, y las suites contra el Moodle
-// desplegado (E2E, API, BDD y accesibilidad), si el despliegue pasó la prueba de humo.
+// desplegado (E2E, API, BDD, accesibilidad y seguridad), si el despliegue pasó la prueba de humo.
 //
 // OMITIR, en el .env de Jenkins, lista etapas que el pipeline se salta (unitarias, calidad, e2e, api,
-// bdd, accesibilidad), para probar una nueva sin esperar las demás. Vacío, que es lo normal, corre todo.
+// bdd, accesibilidad, seguridad, auditoria), para probar una nueva sin esperar las demás. Vacío, que es
+// lo normal, corre todo.
 
 def pruebas(String nombre, String carpetas) {
   catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
@@ -228,6 +232,36 @@ pipeline {
         script {
           suiteContraElDespliegue('accesibilidad', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile',
             'npx cypress run --config-file cypress.accesibilidad.config.js')
+        }
+      }
+    }
+
+    stage('Pruebas de seguridad') {
+      when { expression { env.DESPLEGADO == 'si' && !omitir('seguridad') } }
+      steps {
+        script {
+          suiteContraElDespliegue('seguridad', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile',
+            'npx cypress run --config-file cypress.seguridad.config.js')
+        }
+      }
+    }
+
+    // Revisión de dependencias y análisis dinámico. Los avisos quedan en el reporte (resumen.md y el
+    // HTML de ZAP); el build solo falla si una herramienta no pudo correr.
+    stage('Auditoría de seguridad') {
+      when { expression { env.DESPLEGADO == 'si' && !omitir('auditoria') } }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh '''
+            MONTAJE="--volumes-from $(hostname)" RUTA="$WORKSPACE" \
+            RED_MOODLE=moodle-despliegue-web-1 URL_MOODLE="http://localhost:$PUERTO" \
+              bash pruebas/seguridad/auditar.sh
+          '''
+        }
+      }
+      post {
+        always {
+          archiveArtifacts allowEmptyArchive: true, artifacts: 'pruebas/reportes/auditoria/**'
         }
       }
     }

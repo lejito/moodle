@@ -9,6 +9,7 @@
     "cypress/**/*.js",
     "cypress.config.js",
     "cypress.api.config.js",
-    "cypress.accesibilidad.config.js"
+    "cypress.accesibilidad.config.js",
+    "cypress.seguridad.config.js"
   ]
 }

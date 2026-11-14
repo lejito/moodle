@@ -1,6 +1,6 @@
 // Configuración común de las suites de Cypress del proyecto. Cada suite tiene su archivo de
-// configuración en pruebas/ (cypress.config.js para la E2E, cypress.api.config.js para la de API y
-// cypress.accesibilidad.config.js para la de accesibilidad), que llama a esta función con su nombre: cambian la carpeta de las pruebas y la de los reportes.
+// configuración en pruebas/ (cypress.config.js para la E2E y cypress.<suite>.config.js para las de
+// api, accesibilidad y seguridad), que llama a esta función con su nombre: cambian la carpeta de las pruebas y la de los reportes.
 //
 // Las suites corren contra el Moodle sembrado: el entorno local (pruebas/docker, http://localhost:8000)
 // o el que despliega Jenkins. Antes de cada caso, la tarea "preparar" ejecuta pruebas/seed/preparar.php
@@ -22,6 +22,7 @@ const SUITES = {
   e2e: { carpeta: 'flujos', titulo: 'Pruebas E2E' },
   api: { carpeta: 'api', titulo: 'Pruebas de API' },
   accesibilidad: { carpeta: 'accesibilidad', titulo: 'Pruebas de accesibilidad' },
+  seguridad: { carpeta: 'seguridad', titulo: 'Pruebas de seguridad' },
 };
 
 const preparar = process.env.PREPARAR
@@ -32,7 +33,7 @@ const preparar = process.env.PREPARAR
 /**
  * La configuración de Cypress de una suite.
  *
- * @param {'e2e'|'api'|'accesibilidad'} suite
+ * @param {'e2e'|'api'|'accesibilidad'|'seguridad'} suite
  */
 module.exports = function crearConfiguracion(suite) {
   const { carpeta, titulo } = SUITES[suite];

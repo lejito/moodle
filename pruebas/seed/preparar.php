@@ -72,6 +72,7 @@ const MISMA_PREPARACION = [
     'MOOD-CP-258' => 'MOOD-CP-214',
     'MOOD-CP-259' => 'MOOD-CP-215',
     'MOOD-CP-357' => 'MOOD-CP-313',
+    'MOOD-CP-381' => 'MOOD-CP-315',
     'MOOD-CP-359' => 'MOOD-CP-310',
     'MOOD-CP-455' => 'MOOD-CP-407',
     'MOOD-CP-456' => 'MOOD-CP-408',
@@ -272,6 +273,7 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
     ];
     $ajustes = ['requiresubmissionstatement' => 0, 'markingworkflow' => 0];
     $palabras = 0;
+    $tiposdearchivo = '';
     $entrega = null;
     $bloquear = false;
     $prorroga = 0;
@@ -308,6 +310,10 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
             $ajustes['requiresubmissionstatement'] = 1;
             $entrega = 'borrador';
             break;
+        case 'MOOD-CP-282':
+            // Seguridad: solo se aceptan PDF y texto plano.
+            $tiposdearchivo = '.pdf,.txt';
+            break;
     }
     $DB->update_record('assign', (object) (['id' => $registro->id] + $fechas + $ajustes));
     rebuild_course_cache($curso->id, true);
@@ -323,6 +329,7 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
     $texto = $tarea->get_submission_plugin_by_type('onlinetext');
     $texto->set_config('wordlimitenabled', $palabras ? 1 : 0);
     $texto->set_config('wordlimit', $palabras);
+    $tarea->get_submission_plugin_by_type('file')->set_config('filetypeslist', $tiposdearchivo);
 
     $tarea = tarea($registro->id, $curso);
     if ($entrega) {
@@ -465,6 +472,21 @@ function preparar_rf04(string $caso, stdClass $curso, array $usuarios): array {
     rebuild_course_cache($curso->id, true);
     quiz_delete_all_attempts($DB->get_record('quiz', ['id' => $quiz->id]));
 
+    $intentoajeno = null;
+    if ($caso === 'MOOD-CP-481') {
+        // Seguridad: un intento terminado de otro estudiante, que estudiante.a no debe poder ver.
+        borrar_usuarios_de_apoyo();
+        $apoyo = crear_usuario_de_apoyo(1);
+        enrol_try_internal_enrol($curso->id, $apoyo->id, $DB->get_field('role', 'id', ['shortname' => 'student']));
+        $generador = (new testing_data_generator())->get_plugin_generator('mod_quiz');
+        \core\session\manager::set_user($apoyo);
+        $intento = $generador->create_attempt($quiz->id, $apoyo->id);
+        \mod_quiz\quiz_attempt::create($intento->id)->process_submit(time(), false);
+        \mod_quiz\quiz_attempt::create($intento->id)->process_grade_submission(time());
+        \core\session\manager::set_user(get_admin());
+        $intentoajeno = (int) $intento->id;
+    }
+
     if ($caso === 'MOOD-CP-410') {
         // Los dos intentos permitidos, ya terminados.
         $generador = (new testing_data_generator())->get_plugin_generator('mod_quiz');
@@ -483,6 +505,7 @@ function preparar_rf04(string $caso, stdClass $curso, array $usuarios): array {
         'cuestionario' => (int) $cm->id,
         'idCuestionario' => (int) $quiz->id,
         'contrasenaCuestionario' => 'Quiz-2026',
+        'intentoAjeno' => $intentoajeno,
     ];
 }
 
@@ -611,6 +634,12 @@ function preparar_rf05(string $caso, stdClass $curso, array $usuarios): array {
             break;
         case 'MOOD-CP-513':
             assign_capability('mod/forum:replypost', CAP_PREVENT, $rolestudiante, $contexto->id, true);
+            break;
+        case 'MOOD-CP-581':
+        case 'MOOD-CP-582':
+            // Seguridad: el mensaje de la docente, reciente, para que el plazo de edición (30 minutos)
+            // no sea la razón del rechazo y se compruebe el permiso.
+            $DB->update_record('forum_posts', (object) ['id' => $inicial->firstpost, 'created' => $ahora, 'modified' => $ahora]);
             break;
         case 'MOOD-CP-514':
             $apoyo = crear_usuario_de_apoyo(1);
