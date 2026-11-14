@@ -1,6 +1,6 @@
 // RF-MOOD-05 · Participar en un foro, por la API REST.
 //
-// Casos MOOD-CP-551 a 560. Los hace estudiante.a en el «Foro de laboratorio», que la preparación
+// Casos MOOD-CP-551 a 562. Los hace estudiante.a en el «Foro de laboratorio», que la preparación
 // deja con solo el «Debate inicial» del docente. capabilities.reply de cada mensaje dice si el
 // estudiante puede responderlo; mod_forum_add_discussion_post lo comprueba de nuevo en el servidor.
 
@@ -110,5 +110,30 @@ describe('RF-MOOD-05 · Participar en un foro (API)', () => {
     preparar('MOOD-CP-560');
     responder('mensaje', 'Respuesta después del vencimiento').its('warnings').should('deep.eq', []);
     mensajes('debate').should('have.length', 2);
+  });
+
+  // Hallazgos H-API-01 y H-API-02: antes se guardaba una respuesta vacía y un asunto de 256
+  // caracteres llegaba a la base de datos. Corregidos con TDD en add_discussion_post().
+  it('MOOD-CP-561 - una respuesta vacía no se guarda', () => {
+    preparar('MOOD-CP-561');
+    responder('mensaje', '<p> </p>').then((respuesta) => {
+      expect(respuesta.exception).to.match(/moodle_exception$/);
+      expect(respuesta.errorcode).to.eq('erroremptymessage');
+    });
+    mensajes('debate').should('have.length', 1);
+  });
+
+  it('MOOD-CP-562 - un asunto de 256 caracteres se rechaza sin error de base de datos', () => {
+    preparar('MOOD-CP-562');
+    cy.then(() => llamar('mod_forum_add_discussion_post', {
+      postid: datos.mensaje,
+      subject: 'A'.repeat(256),
+      message: 'Respuesta con un asunto largo',
+    })).then((respuesta) => {
+      expect(respuesta.exception).to.match(/invalid_parameter_exception$/);
+      expect(respuesta.message).to.contain('255');
+      expect(respuesta.message).not.to.match(/value too long|dml/i);
+    });
+    mensajes('debate').should('have.length', 1);
   });
 });
