@@ -855,6 +855,17 @@ class mod_forum_external extends external_api {
             throw new moodle_exception('nopostforum', 'forum');
         }
 
+        // The reply form requires a message and a subject of up to 255 characters, and so does the API.
+        if (html_is_blank($params['message'])) {
+            throw new moodle_exception('erroremptymessage', 'forum');
+        }
+        if (trim($params['subject']) === '') {
+            throw new moodle_exception('erroremptysubject', 'forum');
+        }
+        if (\core_text::strlen($params['subject']) > 255) {
+            throw new \invalid_parameter_exception(get_string('maximumchars', '', 255));
+        }
+
         $thresholdwarning = forum_check_throttling($forumrecord, $cm);
         forum_check_blocking_threshold($thresholdwarning);
 
