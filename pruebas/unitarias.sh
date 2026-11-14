@@ -29,6 +29,10 @@
 # sola llamada a docker compose para todas las pruebas.
 set -uo pipefail
 
+# Git Bash convierte por su cuenta las rutas que empiezan con / en rutas de Windows (/var/www/moodle
+# pasaría a C:/Program Files/Git/var/www/moodle), y esas rutas son del contenedor. En Linux no hace nada.
+export MSYS_NO_PATHCONV=1
+
 # --- Funcionalidad -> componentes (nombre:carpeta), igual que el Jenkinsfile.
 componentes() {
   case $1 in

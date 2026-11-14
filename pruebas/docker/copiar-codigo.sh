@@ -20,6 +20,10 @@
 #   bash pruebas/docker/copiar-codigo.sh --solo-lf   # solo esa conversión
 set -euo pipefail
 
+# Git Bash convierte por su cuenta las rutas que empiezan con / en rutas de Windows (/var/www/moodle
+# pasaría a C:/Program Files/Git/var/www/moodle), y esas rutas son del contenedor. En Linux no hace nada.
+export MSYS_NO_PATHCONV=1
+
 raiz=$(git rev-parse --show-toplevel)
 cd "$raiz"
 

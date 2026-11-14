@@ -16,6 +16,10 @@
 #   T5 (RF-MOOD-05) MOOD-CP-501  el foro con solo el debate inicial de Diana
 set -euo pipefail
 
+# Git Bash convierte por su cuenta las rutas que empiezan con / en rutas de Windows (/var/www/moodle
+# pasaría a C:/Program Files/Git/var/www/moodle), y esas rutas son del contenedor. En Linux no hace nada.
+export MSYS_NO_PATHCONV=1
+
 declare -A casos=([T1]=MOOD-CP-101 [T2]=MOOD-CP-201 [T3]=MOOD-CP-301 [T4]=MOOD-CP-401 [T5]=MOOD-CP-501)
 
 preparar() {
