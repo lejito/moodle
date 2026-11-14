@@ -55,6 +55,8 @@ const CLAVE_GRUPO_A = 'Grupo-A-2026';
 const COHORTE = 'Cohorte de laboratorio';
 /** Servicio web de las pruebas de API, el que crea servicios_web.php. */
 const SERVICIO = 'pruebas';
+/** Texto de la retroalimentación general que crea la preparación de MOOD-CP-461. */
+const RETROALIMENTACION = 'Retroalimentación de prueba';
 
 /**
  * Casos de API que parten del mismo estado que un caso E2E: usan su preparación. Los que no están
@@ -314,6 +316,11 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
             // Seguridad: solo se aceptan PDF y texto plano.
             $tiposdearchivo = '.pdf,.txt';
             break;
+        case 'MOOD-CP-262':
+        case 'MOOD-CP-263':
+            // Un borrador, para dejarle un archivo entregado o una imagen en el texto.
+            $entrega = 'borrador';
+            break;
     }
     $DB->update_record('assign', (object) (['id' => $registro->id] + $fechas + $ajustes));
     rebuild_course_cache($curso->id, true);
@@ -355,10 +362,22 @@ function preparar_rf02(string $caso, stdClass $curso, array $usuarios): array {
         $tarea->save_user_extension($estudiante->id, $prorroga);
     }
 
+    // Archivos que se descargan por webservice/pluginfile.php (MOOD-DEF-002).
+    $contexto = $tarea->get_context()->id;
+    $archivo = match ($caso) {
+        'MOOD-CP-261' => archivo_de_prueba($contexto, 'mod_assign', 'introattachment', 0, 'enunciado.txt'),
+        'MOOD-CP-262' => archivo_de_prueba($contexto, 'assignsubmission_file', 'submission_files',
+            (int) $tarea->get_user_submission($estudiante->id, false)->id, 'entrega.txt'),
+        'MOOD-CP-263' => archivo_de_prueba($contexto, 'assignsubmission_onlinetext', 'submissions_onlinetext',
+            (int) $tarea->get_user_submission($estudiante->id, false)->id, 'imagen.txt'),
+        default => null,
+    };
+
     return [
         'tarea' => (int) $tarea->get_course_module()->id,
         'idTarea' => (int) $registro->id,
         'nombreTarea' => TAREA,
+        'archivo' => $archivo,
     ];
 }
 
@@ -501,11 +520,47 @@ function preparar_rf04(string $caso, stdClass $curso, array $usuarios): array {
     }
 
     $cm = get_coursemodule_from_instance('quiz', $quiz->id, $curso->id, false, MUST_EXIST);
+    $contexto = context_module::instance($cm->id);
+
+    // Archivos que se descargan por webservice/pluginfile.php (MOOD-DEF-002).
+    $fs = get_file_storage();
+    foreach ($DB->get_records('quiz_feedback', ['quizid' => $quiz->id]) as $vieja) {
+        if ($vieja->feedbacktext === RETROALIMENTACION) {
+            $fs->delete_area_files($contexto->id, 'mod_quiz', 'feedback', $vieja->id);
+            $DB->delete_records('quiz_feedback', ['id' => $vieja->id]);
+        }
+    }
+    $archivo = null;
+    if ($caso === 'MOOD-CP-461') {
+        $retroalimentacion = (int) $DB->insert_record('quiz_feedback', (object) [
+            'quizid' => $quiz->id,
+            'feedbacktext' => RETROALIMENTACION,
+            'feedbacktextformat' => FORMAT_HTML,
+            'mingrade' => 0,
+            'maxgrade' => 11,
+        ]);
+        $archivo = archivo_de_prueba($contexto->id, 'mod_quiz', 'feedback', $retroalimentacion, 'retroalimentacion.txt');
+    }
+    if ($caso === 'MOOD-CP-462') {
+        // Un intento en curso de estudiante.a; el archivo va en el enunciado de la pregunta de la primera casilla.
+        $estudiante = $usuarios['estudiante.a'];
+        \core\session\manager::set_user($estudiante);
+        $intento = (new testing_data_generator())->get_plugin_generator('mod_quiz')
+            ->create_attempt($quiz->id, $estudiante->id);
+        \core\session\manager::set_user(get_admin());
+        $pregunta = question_engine::load_questions_usage_by_activity($intento->uniqueid)->get_question(1);
+        $contextopregunta = (int) $DB->get_field('question_categories', 'contextid', ['id' => $pregunta->category]);
+        $archivo = archivo_de_prueba($contextopregunta, 'question', 'questiontext', (int) $pregunta->id, 'figura.txt');
+        // La URL de un archivo de pregunta lleva el uso y la casilla del intento antes del id de la pregunta.
+        $archivo['ruta'] = "/{$contextopregunta}/question/questiontext/{$intento->uniqueid}/1/{$pregunta->id}/figura.txt";
+    }
+
     return [
         'cuestionario' => (int) $cm->id,
         'idCuestionario' => (int) $quiz->id,
         'contrasenaCuestionario' => 'Quiz-2026',
         'intentoAjeno' => $intentoajeno,
+        'archivo' => $archivo,
     ];
 }
 
@@ -661,6 +716,12 @@ function preparar_rf05(string $caso, stdClass $curso, array $usuarios): array {
             ]);
             break;
     }
+
+    // Archivo que se descarga por webservice/pluginfile.php (MOOD-DEF-002).
+    get_file_storage()->delete_area_files($contexto->id, 'mod_forum', 'attachment', $inicial->firstpost);
+    $datos['archivo'] = $caso === 'MOOD-CP-563'
+        ? archivo_de_prueba($contexto->id, 'mod_forum', 'attachment', (int) $inicial->firstpost, 'adjunto.txt')
+        : null;
     rebuild_course_cache($curso->id, true);
     return $datos;
 }
@@ -677,6 +738,31 @@ function tarea(int $id, stdClass $curso): assign {
     require_once($CFG->dirroot . '/mod/assign/locallib.php');
     $cm = get_coursemodule_from_instance('assign', $id, $curso->id, false, MUST_EXIST);
     return new assign(context_module::instance($cm->id), $cm, $curso);
+}
+
+/**
+ * Deja un archivo de texto en un área, en lugar de los que tuviera ese ítem.
+ *
+ * @param int $contexto
+ * @param string $componente
+ * @param string $area
+ * @param int $item
+ * @param string $nombre
+ * @return array La ruta para pluginfile.php y el contenido esperado.
+ */
+function archivo_de_prueba(int $contexto, string $componente, string $area, int $item, string $nombre): array {
+    $fs = get_file_storage();
+    $fs->delete_area_files($contexto, $componente, $area, $item);
+    $contenido = "Archivo de prueba {$nombre} de {$componente}";
+    $fs->create_file_from_string([
+        'contextid' => $contexto,
+        'component' => $componente,
+        'filearea' => $area,
+        'itemid' => $item,
+        'filepath' => '/',
+        'filename' => $nombre,
+    ], $contenido);
+    return ['ruta' => "/{$contexto}/{$componente}/{$area}/{$item}/{$nombre}", 'contenido' => $contenido];
 }
 
 /**

@@ -3,6 +3,9 @@
 // Casos MOOD-CP-451 a 460. Los hace estudiante.a con el cuestionario sembrado: verdadero o falso
 // (True), respuesta corta (frog = 1, toad = 0.8) y numérica (3.14), de 1 punto cada una, sobre 10.
 // Cada caso parte del estado sembrado o del de un caso E2E (MISMA_PREPARACION en preparar.php).
+// MOOD-CP-461 y 462 descargan archivos del cuestionario (MOOD-DEF-002, ver archivos.js).
+
+const { debeServirSoloElArchivo } = require('./archivos');
 
 describe('RF-MOOD-04 · Presentar un cuestionario (API)', () => {
   let datos;
@@ -129,5 +132,15 @@ describe('RF-MOOD-04 · Presentar un cuestionario (API)', () => {
       });
       llamar('mod_quiz_get_attempt_review', { attemptid: attempt.id }).its('grade').should('be.closeTo', 3.33, 0.005);
     });
+  });
+
+  it('MOOD-CP-461 - descarga el archivo de la retroalimentación general', () => {
+    preparar('MOOD-CP-461');
+    cy.then(() => debeServirSoloElArchivo(datos));
+  });
+
+  it('MOOD-CP-462 - durante su intento descarga la figura del enunciado de una pregunta', () => {
+    preparar('MOOD-CP-462');
+    cy.then(() => debeServirSoloElArchivo(datos));
   });
 });

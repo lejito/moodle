@@ -90,6 +90,21 @@ Cypress.Commands.add('servicioWeb', (token, funcion, parametros = {}) => {
   });
 });
 
+/**
+ * Descarga un archivo por /webservice/pluginfile.php con el token de un usuario. La ruta es la de
+ * pluginfile.php (/contexto/componente/área/ítem/archivo). Entrega la respuesta sin fallar por el
+ * código HTTP, porque un archivo que no se sirve responde 404.
+ */
+Cypress.Commands.add('descargarArchivo', (token, ruta) => {
+  Cypress.log({ name: 'descargarArchivo', message: ruta });
+  return cy.request({
+    url: `/webservice/pluginfile.php${ruta}`,
+    qs: { token },
+    failOnStatusCode: false,
+    log: false,
+  });
+});
+
 /** Las etiquetas de axe-core que se revisan: WCAG 2.0, 2.1 y 2.2, niveles A y AA. */
 const ETIQUETAS_WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 

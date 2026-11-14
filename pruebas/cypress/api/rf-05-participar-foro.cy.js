@@ -3,6 +3,9 @@
 // Casos MOOD-CP-551 a 562. Los hace estudiante.a en el «Foro de laboratorio», que la preparación
 // deja con solo el «Debate inicial» del docente. capabilities.reply de cada mensaje dice si el
 // estudiante puede responderlo; mod_forum_add_discussion_post lo comprueba de nuevo en el servidor.
+// MOOD-CP-563 descarga un adjunto del foro (MOOD-DEF-002, ver archivos.js).
+
+const { debeServirSoloElArchivo } = require('./archivos');
 
 describe('RF-MOOD-05 · Participar en un foro (API)', () => {
   let datos;
@@ -135,5 +138,10 @@ describe('RF-MOOD-05 · Participar en un foro (API)', () => {
       expect(respuesta.message).not.to.match(/value too long|dml/i);
     });
     mensajes('debate').should('have.length', 1);
+  });
+
+  it('MOOD-CP-563 - descarga el adjunto del mensaje de la docente', () => {
+    preparar('MOOD-CP-563');
+    cy.then(() => debeServirSoloElArchivo(datos));
   });
 });

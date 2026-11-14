@@ -3,6 +3,9 @@
 // Casos MOOD-CP-251 a 259. Los hace estudiante.a sobre la «Tarea de laboratorio», que usa
 // borradores: guardar deja la entrega en draft y "enviar para calificar" la pasa a submitted.
 // Cada caso parte del estado sembrado o del de un caso E2E (MISMA_PREPARACION en preparar.php).
+// MOOD-CP-261 a 263 descargan archivos de la tarea (MOOD-DEF-002, ver archivos.js).
+
+const { debeServirSoloElArchivo } = require('./archivos');
 
 describe('RF-MOOD-02 · Entregar una tarea (API)', () => {
   let datos;
@@ -117,5 +120,20 @@ describe('RF-MOOD-02 · Entregar una tarea (API)', () => {
     entrega().its('estado').should('eq', 'draft');
     enviar(true).should('deep.eq', []);
     entrega().its('estado').should('eq', 'submitted');
+  });
+
+  it('MOOD-CP-261 - descarga el adjunto del enunciado de la tarea', () => {
+    preparar('MOOD-CP-261');
+    cy.then(() => debeServirSoloElArchivo(datos));
+  });
+
+  it('MOOD-CP-262 - descarga el archivo de su entrega', () => {
+    preparar('MOOD-CP-262');
+    cy.then(() => debeServirSoloElArchivo(datos));
+  });
+
+  it('MOOD-CP-263 - descarga la imagen de su texto en línea', () => {
+    preparar('MOOD-CP-263');
+    cy.then(() => debeServirSoloElArchivo(datos));
   });
 });
