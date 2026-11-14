@@ -79,10 +79,14 @@ services:
     # repositorio entero (~68 000 archivos) demoraba cada cambio entre 36 y 51 s.
     # El resto de Moodle no cambia, porque el fork no se sincroniza con el
     # original; si cambiara, se vuelve a correr copiar-codigo.sh.
+    #
+    # initial_sync: al arrancar, watch copia lo que cambió mientras estaba
+    # apagado (por ejemplo, al aplicar un traspaso), sin repetir copiar-codigo.sh.
     develop:
       watch:
         - &sincronizar
           action: sync
+          initial_sync: true
           path: ../../public/enrol/self
           target: /var/www/moodle/public/enrol/self
           ignore: ['**/phpunit.xml', phpunit.xml]
@@ -96,10 +100,12 @@ services:
           path: ../../public/mod/forum
           target: /var/www/moodle/public/mod/forum
         - action: sync
+          initial_sync: true
           path: ../../pruebas
           target: /var/www/moodle/pruebas
-          ignore: [reportes/, node_modules/]
+          ignore: [reportes/, node_modules/, .cache/]
         - action: sync
+          initial_sync: true
           path: ../../config.php
           target: /var/www/moodle/config.php
 

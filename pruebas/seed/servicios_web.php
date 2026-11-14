@@ -67,6 +67,9 @@ const FUNCIONES = [
     'mod_forum_get_forum_discussions',
     'mod_forum_get_discussion_posts',
     'mod_forum_add_discussion_post',
+    // El resumen con IA de Moodle, que evalúa DeepEval (pruebas/deepeval). Solo responde si
+    // pruebas/seed/ia.php activó el proveedor.
+    'aiplacement_courseassist_summarise_text',
 ];
 
 \core\session\manager::set_user(get_admin());

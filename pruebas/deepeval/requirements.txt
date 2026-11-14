@@ -1,0 +1,6 @@
+# Dependencias de la evaluación con DeepEval. Se instalan en el contenedor de Python que levanta
+# correr.sh; en el equipo no hace falta Python.
+deepeval==4.3.2
+google-genai==2.33.0
+pytest==9.1.1
+requests==2.34.2

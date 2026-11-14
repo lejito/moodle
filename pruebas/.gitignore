@@ -3,3 +3,13 @@ reportes/
 
 # Dependencias de JavaScript de las pruebas E2E (npm ci).
 node_modules/
+
+# Claves de las pruebas con IA (Gemini, Cypress Cloud): cada uno pone las suyas, nunca en git.
+.env
+
+# Presupuesto compartido de consultas a Gemini entre las suites con IA (stagehand/, deepeval/).
+.cache/
+
+# Lo que generan Playwright (Stagehand) y Python (DeepEval) al correr.
+test-results/
+__pycache__/

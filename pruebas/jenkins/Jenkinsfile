@@ -13,6 +13,10 @@
 //   9. Pruebas de seguridad: el OWASP Top 10 sobre las funcionalidades, con Cypress (pruebas/cypress/seguridad).
 //  10. Auditoría de seguridad: composer audit, npm audit y ZAP baseline (pruebas/seguridad/auditar.sh).
 //      Informa los avisos, no hace fallar el build.
+//  11. Pruebas con IA: Stagehand, DeepEval y cy.prompt. Gastan cupos gratuitos (Gemini y Cypress Cloud),
+//      así que solo corren con el parámetro IA marcado (Build with Parameters) y si todo lo anterior
+//      quedó en verde. Una inferencia inestable o un cupo agotado marcan la etapa como inestable, sin
+//      poner el build en rojo.
 //
 // Las etapas de cada funcionalidad y sonar.sources / sonar.exclusions de sonar-project.properties van
 // juntas: si cambia una funcionalidad, cambian las dos. Cada etapa de pruebas corre aunque falle una
@@ -41,14 +45,18 @@ def omitir(String etapa) {
 }
 
 /**
- * Corre una suite de Node (Cypress o Cucumber) en un contenedor que comparte la red del Moodle
- * desplegado: ahí localhost:PUERTO es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso se
- * prepara con preparar.php, por docker exec en ese mismo contenedor. Publica el JUnit de
+ * Corre una suite de Node (Cypress, Cucumber o Playwright) en un contenedor que comparte la red del
+ * Moodle desplegado: ahí localhost:PUERTO es su Apache, y Moodle exige esa dirección (wwwroot). Cada caso
+ * se prepara con preparar.php, por docker exec en ese mismo contenedor. Publica el JUnit de
  * pruebas/reportes/<suite>/junit y archiva todo el reporte.
+ *
+ * extras son argumentos más para docker run (variables de entorno). Si bloqueante es false (las
+ * pruebas con IA), un fallo marca la etapa como inestable y el build sigue en verde.
  */
-def suiteContraElDespliegue(String suite, String imagen, String dockerfile, String comando) {
+def suiteContraElDespliegue(String suite, String imagen, String dockerfile, String comando, String extras,
+    boolean bloqueante) {
   try {
-    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+    catchError(buildResult: bloqueante ? 'FAILURE' : 'SUCCESS', stageResult: bloqueante ? 'FAILURE' : 'UNSTABLE') {
       sh "docker build -q -t ${imagen} -f pruebas/docker/${dockerfile} pruebas/docker"
       sh "rm -rf pruebas/reportes/${suite}"
       sh """
@@ -57,7 +65,7 @@ def suiteContraElDespliegue(String suite, String imagen, String dockerfile, Stri
           -v /var/run/docker.sock:/var/run/docker.sock \
           -e MOODLE_URL="http://localhost:\$PUERTO" \
           -e PREPARAR="docker exec moodle-despliegue-web-1 php pruebas/seed/preparar.php" \
-          ${imagen} sh ci/node.sh ${comando}
+          ${extras} ${imagen} sh ci/node.sh ${comando}
       """
     }
   } finally {
@@ -69,6 +77,12 @@ def suiteContraElDespliegue(String suite, String imagen, String dockerfile, Stri
 
 pipeline {
   agent any
+
+  // Las pruebas con IA gastan cupos gratuitos: solo corren si se marca IA al lanzar el build.
+  parameters {
+    booleanParam(name: 'IA', defaultValue: false,
+      description: 'Correr también Stagehand, DeepEval y cy.prompt (gastan cupo de Gemini y de Cypress Cloud).')
+  }
 
   options {
     timestamps()
@@ -203,7 +217,7 @@ pipeline {
       when { expression { env.DESPLEGADO == 'si' && !omitir('e2e') } }
       steps {
         script {
-          suiteContraElDespliegue('e2e', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile', 'npx cypress run --config-file cypress.config.js')
+          suiteContraElDespliegue('e2e', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile', 'npx cypress run --config-file cypress.config.js', '', true)
         }
       }
     }
@@ -212,7 +226,8 @@ pipeline {
       when { expression { env.DESPLEGADO == 'si' && !omitir('api') } }
       steps {
         script {
-          suiteContraElDespliegue('api', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile', 'npx cypress run --config-file cypress.api.config.js')
+          suiteContraElDespliegue('api', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile', 'npx cypress run --config-file cypress.api.config.js', '',
+            true)
         }
       }
     }
@@ -221,7 +236,8 @@ pipeline {
       when { expression { env.DESPLEGADO == 'si' && !omitir('bdd') } }
       steps {
         script {
-          suiteContraElDespliegue('bdd', 'moodle-pruebas/playwright:1.64.1', 'playwright.Dockerfile', 'npx cucumber-js bdd/features')
+          suiteContraElDespliegue('bdd', 'moodle-pruebas/playwright:1.64.1', 'playwright.Dockerfile', 'npx cucumber-js bdd/features', '',
+            true)
         }
       }
     }
@@ -231,7 +247,7 @@ pipeline {
       steps {
         script {
           suiteContraElDespliegue('accesibilidad', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile',
-            'npx cypress run --config-file cypress.accesibilidad.config.js')
+            'npx cypress run --config-file cypress.accesibilidad.config.js', '', true)
         }
       }
     }
@@ -241,7 +257,7 @@ pipeline {
       steps {
         script {
           suiteContraElDespliegue('seguridad', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile',
-            'npx cypress run --config-file cypress.seguridad.config.js')
+            'npx cypress run --config-file cypress.seguridad.config.js', '', true)
         }
       }
     }
@@ -262,6 +278,40 @@ pipeline {
       post {
         always {
           archiveArtifacts allowEmptyArchive: true, artifacts: 'pruebas/reportes/auditoria/**'
+        }
+      }
+    }
+
+    // Solo con el parámetro IA y si todo lo anterior quedó en verde: así no se gasta cupo en un build que
+    // ya falló. Cada herramienta se salta con aviso si le falta su clave (pruebas/jenkins/.env).
+    stage('Pruebas con IA') {
+      when { expression { params.IA && env.DESPLEGADO == 'si' && todoBien() } }
+      steps {
+        script {
+          suiteContraElDespliegue('stagehand', 'moodle-pruebas/playwright:1.64.1', 'playwright.Dockerfile',
+            'npx playwright test -c playwright.stagehand.config.ts',
+            '-e GOOGLE_GENERATIVE_AI_API_KEY -e CHROMIUM_DE_PLAYWRIGHT=1', false)
+          if (env.CYPRESS_PROJECT_ID?.trim() && env.CYPRESS_RECORD_KEY?.trim()) {
+            suiteContraElDespliegue('ia', 'moodle-pruebas/cypress:16.2.1', 'cypress.Dockerfile',
+              'npx cypress run --config-file cypress.prompt.config.js --browser chrome --record',
+              '-e CYPRESS_PROJECT_ID -e CYPRESS_RECORD_KEY', false)
+          } else {
+            echo 'Faltan CYPRESS_PROJECT_ID o CYPRESS_RECORD_KEY en pruebas/jenkins/.env: cy.prompt no corre.'
+          }
+          try {
+            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+              sh '''
+                MONTAJE="--volumes-from $(hostname)" RUTA="$WORKSPACE" \
+                RED_MOODLE=moodle-despliegue-web-1 URL_MOODLE="http://localhost:$PUERTO" \
+                EN_MOODLE="docker exec -e GOOGLE_GENERATIVE_AI_API_KEY moodle-despliegue-web-1" \
+                  bash pruebas/deepeval/correr.sh
+              '''
+            }
+          } finally {
+            junit allowEmptyResults: true, testResults: 'pruebas/reportes/deepeval/junit/*.xml'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'pruebas/reportes/deepeval/**'
+            sh 'docker run --rm --volumes-from "$(hostname)" alpine:3.22 chown -R "$(id -u):$(id -g)" "$WORKSPACE/pruebas"'
+          }
         }
       }
     }

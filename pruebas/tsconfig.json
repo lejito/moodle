@@ -10,6 +10,7 @@
     "cypress.config.js",
     "cypress.api.config.js",
     "cypress.accesibilidad.config.js",
-    "cypress.seguridad.config.js"
+    "cypress.seguridad.config.js",
+    "cypress.prompt.config.js"
   ]
 }

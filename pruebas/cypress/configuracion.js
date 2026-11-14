@@ -23,6 +23,9 @@ const SUITES = {
   api: { carpeta: 'api', titulo: 'Pruebas de API' },
   accesibilidad: { carpeta: 'accesibilidad', titulo: 'Pruebas de accesibilidad' },
   seguridad: { carpeta: 'seguridad', titulo: 'Pruebas de seguridad' },
+  // cy.prompt: pasos en lenguaje natural que Cypress Cloud convierte en comandos. Gasta cupo de Cypress
+  // Cloud, así que corre aparte y a mano (npm run ia:prompt), con --record.
+  ia: { carpeta: 'ia', titulo: 'Pruebas con IA: cy.prompt' },
 };
 
 const preparar = process.env.PREPARAR
@@ -33,12 +36,14 @@ const preparar = process.env.PREPARAR
 /**
  * La configuración de Cypress de una suite.
  *
- * @param {'e2e'|'api'|'accesibilidad'|'seguridad'} suite
+ * @param {'e2e'|'api'|'accesibilidad'|'seguridad'|'ia'} suite
  */
 module.exports = function crearConfiguracion(suite) {
   const { carpeta, titulo } = SUITES[suite];
   const reportes = `reportes/${suite}`;
   return defineConfig({
+    // Solo lo usa cy.prompt (--record); las demás suites no graban en Cypress Cloud.
+    projectId: process.env.CYPRESS_PROJECT_ID || undefined,
     reporter: 'cypress-multi-reporters',
     reporterOptions: {
       reporterEnabled: 'spec, cypress-mochawesome-reporter, mocha-junit-reporter',

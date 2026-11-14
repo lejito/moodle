@@ -35,6 +35,9 @@
     "seguridad:rf-03": "cypress run --config-file cypress.seguridad.config.js --spec cypress/seguridad/rf-03-*.cy.js",
     "seguridad:rf-04": "cypress run --config-file cypress.seguridad.config.js --spec cypress/seguridad/rf-04-*.cy.js",
     "seguridad:rf-05": "cypress run --config-file cypress.seguridad.config.js --spec cypress/seguridad/rf-05-*.cy.js",
+    "stagehand": "playwright test -c playwright.stagehand.config.ts",
+    "ia:prompt": "node --env-file=.env node_modules/cypress/bin/cypress run --config-file cypress.prompt.config.js --browser chrome --record",
+    "deepeval": "bash deepeval/correr.sh",
     "bdd": "cucumber-js bdd/features",
     "bdd:rf-01": "cucumber-js bdd/features/rf-01-*.feature",
     "bdd:rf-02": "cucumber-js bdd/features/rf-02-*.feature",
@@ -44,7 +47,9 @@
     "bdd:reporte": "serenity-bdd update && serenity-bdd run --source reportes/bdd/serenity-json --destination reportes/bdd/serenity --features bdd/features"
   },
   "devDependencies": {
+    "@browserbasehq/stagehand": "4.3.0",
     "@cucumber/cucumber": "13.3.0",
+    "@playwright/test": "1.64.1",
     "@serenity-js/assertions": "3.49.0",
     "@serenity-js/console-reporter": "3.49.0",
     "@serenity-js/core": "3.49.0",
@@ -58,7 +63,8 @@
     "cypress-multi-reporters": "2.0.5",
     "mocha-junit-reporter": "2.2.1",
     "playwright": "1.64.1",
-    "tsx": "4.23.15"
+    "tsx": "4.23.15",
+    "zod": "4.4.3"
   },
   "allowScripts": {
     "cypress@16.2.1": true,
